@@ -6,7 +6,8 @@
   const I18N = {
     es: {
       title: "Cine colombiano en taquilla",
-      subtitle: "Estrenos en salas de cine en Colombia",
+      subtitle: "Estrenos colombianos en salas de cine nacionales",
+      author: "Dashboard creado por Simón Moreno Salinas",
       asof: "Datos al {d}",
       f_period: "Periodo", p_all: "Todo", p_12m: "Últimos 12 meses", p_ytd: "Este año", p_5y: "Últimos 5 años",
       f_from: "Desde", f_to: "Hasta", f_type: "Duración", all_f: "Todas", all_m: "Todos",
@@ -38,7 +39,8 @@
     },
     en: {
       title: "Colombian films at the box office",
-      subtitle: "Theatrical releases in Colombia",
+      subtitle: "Colombian releases in national movie theaters",
+      author: "Dashboard by Simón Moreno Salinas",
       asof: "Data as of {d}",
       f_period: "Period", p_all: "All time", p_12m: "Last 12 months", p_ytd: "This year", p_5y: "Last 5 years",
       f_from: "From", f_to: "To", f_type: "Length", all_f: "All", all_m: "All",

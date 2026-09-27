@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cine colombiano en taquilla</title>
   <meta name="description" content="Dashboard interactivo de estrenos de películas colombianas en salas y sus admisiones. Fuente: SIREC – MinCulturas.">
+  <meta name="author" content="Simón Moreno Salinas">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><rect x='7' y='17' width='4' height='8' rx='1' fill='white'/><rect x='14' y='11' width='4' height='14' rx='1' fill='white'/><rect x='21' y='7' width='4' height='18' rx='1' fill='white'/></svg>">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js" defer></script>
@@ -14,7 +15,7 @@
   <header class="topbar">
     <div class="brand">
       <h1 data-i18n="title">Cine colombiano en taquilla</h1>
-      <p class="subtitle"><span data-i18n="subtitle">Estrenos en salas de cine en Colombia</span> · <span id="asof"></span></p>
+      <p class="subtitle"><span data-i18n="subtitle">Estrenos colombianos en salas de cine nacionales</span> · <span id="asof"></span></p>
     </div>
     <div class="lang" role="group" aria-label="Idioma / Language">
       <button type="button" data-lang="es" aria-pressed="true">ES</button>
@@ -200,6 +201,7 @@
 
   <footer class="foot">
     <p><span data-i18n="source">Fuente</span>: <a href="https://mcultura-my.sharepoint.com/:f:/g/personal/sirec_mincultura_gov_co/EvK4Z0jd1G1Mvgu94k1L5YsB4IpRICiX41MTdYZtm8Pk8Q" target="_blank" rel="noopener">SIREC – Ministerio de las Culturas, las Artes y los Saberes</a> · <span data-i18n="refresh">Actualización automática cada jueves</span> · <span id="generated"></span></p>
+    <p class="credit" data-i18n="author">Dashboard creado por Simón Moreno Salinas</p>
   </footer>
 
   <div class="loading" id="loading" data-i18n="loading">Cargando datos…</div>
