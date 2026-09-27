@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cine colombiano en taquilla</title>
+  <meta name="description" content="Dashboard interactivo de estrenos de películas colombianas en salas y sus admisiones. Fuente: SIREC – MinCulturas.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><rect x='7' y='17' width='4' height='8' rx='1' fill='white'/><rect x='14' y='11' width='4' height='14' rx='1' fill='white'/><rect x='21' y='7' width='4' height='18' rx='1' fill='white'/></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1 data-i18n="title">Cine colombiano en taquilla</h1>
+      <p class="subtitle"><span data-i18n="subtitle">Estrenos en salas de cine en Colombia</span> · <span id="asof"></span></p>
+    </div>
+    <div class="lang" role="group" aria-label="Idioma / Language">
+      <button type="button" data-lang="es" aria-pressed="true">ES</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <section class="filters" aria-label="Filtros">
+    <div class="filter period">
+      <span class="flabel" data-i18n="f_period">Periodo</span>
+      <div class="period-row">
+      <div class="chips" id="presets">
+        <button type="button" data-preset="all" data-i18n="p_all">Todo</button>
+        <button type="button" data-preset="12m" data-i18n="p_12m">Últimos 12 meses</button>
+        <button type="button" data-preset="ytd" data-i18n="p_ytd">Este año</button>
+        <button type="button" data-preset="5y" data-i18n="p_5y">Últimos 5 años</button>
+      </div>
+      <div class="range">
+        <label><span class="sr" data-i18n="f_from">Desde</span><select id="fromYear"></select></label>
+        <span aria-hidden="true">–</span>
+        <label><span class="sr" data-i18n="f_to">Hasta</span><select id="toYear"></select></label>
+      </div>
+      </div>
+    </div>
+    <div class="filter">
+      <span class="flabel" data-i18n="f_type">Duración</span>
+      <div class="seg" id="typeSeg">
+        <button type="button" data-type="" data-i18n="all_f">Todas</button>
+        <button type="button" data-type="Largometraje" data-i18n="Largometraje">Largometraje</button>
+        <button type="button" data-type="Cortometraje" data-i18n="Cortometraje">Cortometraje</button>
+      </div>
+    </div>
+    <label class="filter">
+      <span class="flabel" data-i18n="f_genre">Género</span>
+      <select id="genre"></select>
+    </label>
+    <label class="filter">
+      <span class="flabel" data-i18n="f_rating">Clasificación</span>
+      <select id="rating"></select>
+    </label>
+    <label class="filter">
+      <span class="flabel" data-i18n="f_prod">Producción</span>
+      <select id="prod"></select>
+    </label>
+    <label class="filter grow">
+      <span class="flabel" data-i18n="f_search">Buscar título</span>
+      <input id="search" type="search" autocomplete="off">
+    </label>
+    <button type="button" class="reset" id="reset" data-i18n="reset">Limpiar filtros</button>
+  </section>
+
+  <main>
+    <section class="kpis" aria-label="Indicadores">
+      <article class="kpi hero">
+        <h2 data-i18n="k_films">Películas estrenadas</h2>
+        <p class="value" id="kFilms">–</p>
+        <p class="note" id="kFilmsNote"></p>
+      </article>
+      <article class="kpi">
+        <h2 data-i18n="k_adm">Admisiones totales</h2>
+        <p class="value" id="kAdm">–</p>
+        <p class="note" id="kAdmNote"></p>
+      </article>
+      <article class="kpi">
+        <h2 data-i18n="k_features">Largometrajes</h2>
+        <p class="value" id="kFeat">–</p>
+        <p class="note" id="kFeatNote"></p>
+      </article>
+      <article class="kpi">
+        <h2 data-i18n="k_shorts">Cortometrajes</h2>
+        <p class="value" id="kShort">–</p>
+        <p class="note" id="kShortNote"></p>
+      </article>
+      <article class="kpi">
+        <h2 data-i18n="k_median">Mediana de admisiones por largometraje</h2>
+        <p class="value" id="kMedian">–</p>
+        <p class="note" id="kMedianNote"></p>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card span2">
+        <header class="card-head">
+          <div>
+            <h2 data-i18n="c_time">Estrenos en el tiempo</h2>
+            <p class="hint" data-i18n="c_time_hint">Haga clic en una barra para filtrar ese periodo</p>
+          </div>
+          <div class="seg small" id="granSeg">
+            <button type="button" data-gran="year" data-i18n="g_year">Año</button>
+            <button type="button" data-gran="month" data-i18n="g_month">Mes</button>
+          </div>
+        </header>
+        <div class="legend" id="legTime"></div>
+        <div class="chart" id="chTime" role="img"></div>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <div>
+            <h2 data-i18n="c_type">Películas por duración</h2>
+            <p class="hint" data-i18n="c_type_hint">Clic para filtrar</p>
+          </div>
+        </header>
+        <div class="chart short" id="chType" role="img"></div>
+        <h2 class="sub" data-i18n="c_typeadm">Admisiones por duración</h2>
+        <div class="chart short" id="chTypeAdm" role="img"></div>
+      </article>
+
+      <article class="card span2">
+        <header class="card-head">
+          <div>
+            <h2 data-i18n="c_top">Películas con más admisiones</h2>
+            <p class="hint" id="topHint"></p>
+          </div>
+          <div class="controls">
+            <div class="seg small" id="topTypeSeg">
+              <button type="button" data-top="Largometraje" data-i18n="Largometraje_pl">Largometrajes</button>
+              <button type="button" data-top="Cortometraje" data-i18n="Cortometraje_pl">Cortometrajes</button>
+            </div>
+            <div class="seg small" id="topNSeg">
+              <button type="button" data-n="10">10</button>
+              <button type="button" data-n="20">20</button>
+            </div>
+          </div>
+        </header>
+        <div class="chart tall" id="chTop" role="img"></div>
+        <p class="footnote" data-i18n="short_note">Los cortometrajes suelen proyectarse antes de otras películas en las salas, por lo que sus admisiones reflejan esas funciones. Compárelos por separado de los largometrajes.</p>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <div>
+            <h2 data-i18n="c_genre">Películas por género</h2>
+            <p class="hint" data-i18n="c_type_hint">Clic para filtrar</p>
+          </div>
+        </header>
+        <div class="legend" id="legGenre"></div>
+        <div class="chart short" id="chGenre" role="img"></div>
+        <h2 class="sub" data-i18n="c_rating">Películas por clasificación</h2>
+        <div class="chart short" id="chRating" role="img"></div>
+      </article>
+
+      <article class="card span3">
+        <header class="card-head">
+          <div>
+            <h2 data-i18n="c_admtime">Admisiones por año de estreno</h2>
+            <p class="hint" data-i18n="c_admtime_hint">Admisiones acumuladas hasta la fecha, según el año en que se estrenó cada película</p>
+          </div>
+        </header>
+        <div class="legend" id="legAdm"></div>
+        <div class="chart" id="chAdm" role="img"></div>
+      </article>
+
+      <article class="card span3">
+        <header class="card-head">
+          <div>
+            <h2 data-i18n="c_table">Detalle de películas</h2>
+            <p class="hint" id="tableHint"></p>
+          </div>
+          <button type="button" class="ghost" id="csv" data-i18n="csv">Descargar CSV</button>
+        </header>
+        <div class="table-wrap">
+          <table id="table">
+            <thead>
+              <tr>
+                <th data-sort="t" data-i18n="th_title">Título</th>
+                <th data-sort="d" data-i18n="th_date">Estreno</th>
+                <th data-sort="ty" data-i18n="th_type">Duración</th>
+                <th data-sort="m" class="num" data-i18n="th_min">Min.</th>
+                <th data-sort="g" data-i18n="th_genre">Género</th>
+                <th data-sort="r" data-i18n="th_rating">Clasificación</th>
+                <th data-sort="c" data-i18n="th_country">Nacionalidad</th>
+                <th data-sort="a" class="num" data-i18n="th_adm">Admisiones</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" class="ghost more" id="more" data-i18n="more">Mostrar más</button>
+      </article>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p><span data-i18n="source">Fuente</span>: <a href="https://mcultura-my.sharepoint.com/:f:/g/personal/sirec_mincultura_gov_co/EvK4Z0jd1G1Mvgu94k1L5YsB4IpRICiX41MTdYZtm8Pk8Q" target="_blank" rel="noopener">SIREC – Ministerio de las Culturas, las Artes y los Saberes</a> · <span data-i18n="refresh">Actualización automática cada jueves</span> · <span id="generated"></span></p>
+  </footer>
+
+  <div class="loading" id="loading" data-i18n="loading">Cargando datos…</div>
+</body>
+</html>

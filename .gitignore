@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+*.xlsx
+.claude/settings.local.json
+desktop.ini
