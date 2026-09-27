@@ -49,6 +49,16 @@ python -m http.server 8765 --directory docs   # preview (also in .claude/launch.
   (or `chr(92)` in Python) for any edit whose text contains backslashes.
 - User-requested must-haves: ES/EN switch top right, films-released card, releases-over-time bars, top films by admissions, duración bars, time filter.
 
+## Topic tagging runs on the Claude subscription, not the API
+- The user chose not to pay for the API. The backfill (1,419 films) was tagged in a Claude Code session with Sonnet
+  subagents via `tag_topics.py --export` → tag → `--import`. No `ANTHROPIC_API_KEY` secret exists, so the Actions tagging
+  step just logs a warning and skips.
+- New films are tagged by the cloud routine "Weekly topic tagging – Colombian films dashboard"
+  (https://claude.ai/code/routines/trig_014vxfFyyL4Yv7vXa3BDJSzf): Thursdays 19:00 UTC, two hours after the data refresh,
+  model claude-sonnet-5, tools Bash/Read/Write. It exports pending films, tags them itself, imports, and pushes only
+  `docs/data/topics.json` to main (which triggers the Pages deploy). Debug with RemoteTrigger `list_runs` / `get_run_log`.
+  Not yet proven: that a routine can push directly to main (the first real run with new films will show it).
+
 ## Git
 - Local identity is repo-scoped: `ch-augustedupin <ch-augustedupin@users.noreply.github.com>` (keeps the personal email out of the public repo).
 - The Actions bot commits weekly `data: weekly refresh …` — `git pull` before editing.
