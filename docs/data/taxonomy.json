@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "draft - pending review by the dashboard author",
+  "status": "approved by the dashboard author on 2026-09-28",
   "topics": [
     {"code": "conflicto", "es": "Conflicto armado", "en": "Armed conflict", "hint": "guerrilla, paramilitares, ejército, guerra, secuestro por grupos armados"},
     {"code": "memoria", "es": "Memoria, víctimas y paz", "en": "Memory, victims & peace", "hint": "víctimas, desaparecidos, masacres recordadas, reparación, reconciliación, construcción de paz"},
