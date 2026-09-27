@@ -169,6 +169,9 @@ def main() -> int:
     ap.add_argument("--limit", type=int, help="only tag the first N pending films")
     ap.add_argument("--dry-run", action="store_true", help="print results, don't write the cache")
     ap.add_argument("--estimate", action="store_true", help="count pending films and estimate tokens; no API calls")
+    ap.add_argument("--export", metavar="FILE", help="write pending films as JSON for tagging outside the API; no API calls")
+    ap.add_argument("--import", dest="import_", metavar="FILE",
+                    help='merge topics tagged outside the API: JSON {"<id>": ["code", ...]}; no API calls')
     args = ap.parse_args()
 
     films = load_json(FILMS, {}).get("films", [])
@@ -187,6 +190,37 @@ def main() -> int:
         todo = todo[: args.limit]
 
     system = SYSTEM.format(topics="\n".join(f"{t['code']}: {t['es']} — {t['hint']}" for t in tax["topics"]))
+
+    # Tagging without the API (e.g. inside a Claude Code session): export pending films, tag them
+    # with the same instructions (printed alongside), then import the results.
+    if args.export:
+        Path(args.export).write_text(json.dumps({
+            "instructions": system,
+            "films": [{"id": f["id"], "titulo": f["t"], "sinopsis": f["syn"]} for f in todo],
+        }, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"Exported {len(todo)} pending films to {args.export}.")
+        return 0
+    if args.import_:
+        if "draft" in tax.get("status", ""):
+            print("ERROR: taxonomy.json is still a draft.", file=sys.stderr)
+            return 1
+        by_id_all = {f["id"]: f for f in films if f.get("id") is not None}
+        raw = json.loads(Path(args.import_).read_text(encoding="utf-8"))
+        added, single, skipped = 0, 0, []
+        for key, topics in raw.items():
+            f = by_id_all.get(int(key))
+            clean = list(dict.fromkeys(t for t in topics if t in valid))[:MAX_TOPICS]
+            if not f or not clean or len(f.get("syn", "").split()) < MIN_WORDS:
+                skipped.append(key)
+                continue
+            cache["films"][str(f["id"])] = {"h": sha(f["syn"]), "t": clean}
+            added += 1
+            single += len(clean) < 2
+        cache["taxonomy_version"] = tax["version"]
+        save_cache(cache)
+        print(f"Imported topics for {added} films ({single} with a single topic); skipped {len(skipped)}: {skipped[:10]}")
+        return 0
+
     if args.estimate or not todo:
         chars = sum(len(f["syn"]) + len(f["t"]) + 40 for f in todo)
         requests = -(-len(todo) // CHUNK)
