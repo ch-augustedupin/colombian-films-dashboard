@@ -11,7 +11,7 @@
       asof: "Datos al {d}",
       f_period: "Periodo", p_all: "Todo", p_12m: "Últimos 12 meses", p_ytd: "Este año", p_5y: "Últimos 5 años",
       f_from: "Desde", f_to: "Hasta", f_type: "Duración", all_f: "Todas", all_m: "Todos",
-      f_genre: "Género", f_rating: "Clasificación", f_prod: "Producción", f_search: "Buscar título",
+      f_genre: "Género", f_rating: "Clasificación", f_prod: "Producción", f_search: "Buscar título o director",
       prod_co: "100% colombiana", prod_coprod: "Coproducción internacional",
       search_ph: "Ej.: El Paseo", reset: "Limpiar filtros",
       k_films: "Películas estrenadas", k_adm: "Admisiones totales", k_features: "Largometrajes",
@@ -36,6 +36,15 @@
       films_word: "películas", adm_word: "admisiones", total: "Total", released: "Estreno",
       Largometraje: "Largometraje", Cortometraje: "Cortometraje",
       Largometraje_pl: "Largometrajes", Cortometraje_pl: "Cortometrajes",
+      f_topic: "Tema", c_topics: "Temas más frecuentes",
+      c_topics_hint: "Temas identificados en la sinopsis de cada película · clic para filtrar",
+      ai_title: "¿De dónde salen los temas?",
+      ai_body: "Cada sinopsis del registro de títulos clasificados del SIREC fue leída por un modelo de inteligencia artificial (Claude, de Anthropic), que eligió entre 2 y 3 temas evidentes de una lista cerrada de {n} temas. Es una clasificación automática y puede contener errores; las películas sin sinopsis o con sinopsis muy breves no tienen temas.",
+      ai_stats: "{a} de {b} películas en la selección tienen temas.",
+      topics_pending: "Los temas se mostrarán cuando termine la clasificación de las sinopsis.",
+      th_dir: "Dirección", th_topics: "Temas", syn: "Sinopsis", syn_none: "Sin sinopsis disponible.",
+      d_original: "Título original", d_min: "Duración", d_applicant: "Solicitado por", minutes: "{n} min",
+      expand: "Ver sinopsis y detalles",
     },
     en: {
       title: "Colombian films at the box office",
@@ -44,7 +53,7 @@
       asof: "Data as of {d}",
       f_period: "Period", p_all: "All time", p_12m: "Last 12 months", p_ytd: "This year", p_5y: "Last 5 years",
       f_from: "From", f_to: "To", f_type: "Length", all_f: "All", all_m: "All",
-      f_genre: "Genre", f_rating: "Rating", f_prod: "Production", f_search: "Search title",
+      f_genre: "Genre", f_rating: "Rating", f_prod: "Production", f_search: "Search title or director",
       prod_co: "100% Colombian", prod_coprod: "International co-production",
       search_ph: "E.g. El Paseo", reset: "Clear filters",
       k_films: "Films released", k_adm: "Total admissions", k_features: "Feature films",
@@ -69,6 +78,15 @@
       films_word: "films", adm_word: "admissions", total: "Total", released: "Released",
       Largometraje: "Feature film", Cortometraje: "Short film",
       Largometraje_pl: "Feature films", Cortometraje_pl: "Short films",
+      f_topic: "Topic", c_topics: "Most frequent topics",
+      c_topics_hint: "Topics identified in each film's synopsis · click to filter",
+      ai_title: "Where do the topics come from?",
+      ai_body: "Each synopsis in SIREC's register of classified titles was read by an AI model (Claude, by Anthropic), which picked 2 to 3 evident topics from a closed list of {n}. It is an automatic classification and may contain mistakes; films with no synopsis or a very short one have no topics.",
+      ai_stats: "{a} of {b} films in the selection have topics.",
+      topics_pending: "Topics will appear once the synopses have been classified.",
+      th_dir: "Director", th_topics: "Topics", syn: "Synopsis", syn_none: "No synopsis available.",
+      d_original: "Original title", d_min: "Running time", d_applicant: "Submitted by", minutes: "{n} min",
+      expand: "Show synopsis and details",
     },
   };
   const VALUES_EN = {
@@ -97,13 +115,14 @@
   const S = {
     lang: LS.get("lang") === "en" ? "en" : (LS.get("lang") === "es" ? "es" : (navigator.language || "es").startsWith("es") ? "es" : "en"),
     preset: "all", from: null, to: null,
-    type: "", genre: "", rating: "", prod: "", q: "",
+    type: "", genre: "", rating: "", prod: "", topic: "", q: "",
+    open: new Set(),
     gran: "year", topType: "Largometraje", topN: 10,
     sort: { key: "d", dir: -1 }, shown: 25,
     // Shorts' admissions dwarf features', so this chart opens on features only.
     hiddenAdm: new Set(["Cortometraje"]),
   };
-  let FILMS = [], META = {}, MIN_DATE, MAX_DATE, MIN_YEAR, MAX_YEAR;
+  let FILMS = [], META = {}, TOPICS = [], HAS_TOPICS = false, MIN_DATE, MAX_DATE, MIN_YEAR, MAX_YEAR;
   const charts = {};
 
   const t = (k, vars) => {
@@ -124,6 +143,7 @@
   const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const typeColor = (ty) => css(ty === "Largometraje" ? "--s1" : "--s2");
   const iso = (d) => d.toISOString().slice(0, 10);
+  const topicLabel = (code) => { const tp = TOPICS.find((x) => x.code === code); return tp ? tp[S.lang] : code; };
 
   // ---------- filtering ----------
   function passes(f, skip = "") {
@@ -131,12 +151,13 @@
     if (skip !== "type" && S.type && f.ty !== S.type) return false;
     if (skip !== "genre" && S.genre && f.g !== S.genre) return false;
     if (skip !== "rating" && S.rating && f.r !== S.rating) return false;
+    if (skip !== "topic" && S.topic && !f.tp.includes(S.topic)) return false;
     if (S.prod === "co" && f.c.length !== 1) return false;
     if (S.prod === "coprod" && f.c.length < 2) return false;
     if (S.q && !f._s.includes(S.q)) return false;
     return true;
   }
-  const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const norm = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
   function applyPreset(p) {
     S.preset = p;
@@ -164,6 +185,7 @@
     renderTop(rows);
     renderBreakdown("chGenre", "genre", "g", GENRES);
     renderBreakdown("chRating", "rating", "r", RATINGS);
+    renderTopics(rows);
     renderAdm(rows);
     renderTable(rows);
   }
@@ -179,8 +201,12 @@
     fillSelect($("#genre"), [["", t("all_m")], ...GENRES.map((g) => [g, tv(g)])], S.genre);
     fillSelect($("#rating"), [["", t("all_f")], ...RATINGS.map((r) => [r, tv(r)])], S.rating);
     fillSelect($("#prod"), [["", t("all_f")], ["co", t("prod_co")], ["coprod", t("prod_coprod")]], S.prod);
+    const topicOpts = TOPICS.map((tp) => [tp.code, tp[S.lang]]).sort((a, b) => a[1].localeCompare(b[1], locale()));
+    fillSelect($("#topic"), [["", t("all_m")], ...topicOpts], S.topic);
+    $("#topicFilter").hidden = !HAS_TOPICS;
+    $("#aiBody").textContent = t("ai_body", { n: TOPICS.length });
     const legendHtml = TYPES.map((ty) => ({ ty, label: tv(ty) }));
-    for (const id of ["#legTime", "#legGenre"]) buildLegend($(id), legendHtml, false);
+    for (const id of ["#legTime", "#legGenre", "#legTopics"]) buildLegend($(id), legendHtml, false);
     buildLegend($("#legAdm"), legendHtml, true);
   }
 
@@ -218,7 +244,7 @@
       b.style.opacity = b.disabled ? "0.4" : "";
     });
     $$("#topNSeg button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.n === S.topN)));
-    $("#genre").value = S.genre; $("#rating").value = S.rating; $("#prod").value = S.prod;
+    $("#genre").value = S.genre; $("#rating").value = S.rating; $("#prod").value = S.prod; $("#topic").value = S.topic;
   }
 
   function renderKpis(rows) {
@@ -439,9 +465,44 @@
     $("#chAdm").setAttribute("aria-label", t("c_admtime"));
   }
 
+  function renderTopics(rows) {
+    $("#topicsCard").hidden = !HAS_TOPICS;
+    $("#aiCard").hidden = !HAS_TOPICS;
+    if (!HAS_TOPICS) return;
+    const tagged = rows.filter((f) => f.tp.length).length;
+    $("#aiStats").textContent = t("ai_stats", { a: fmt(tagged), b: fmt(rows.length) });
+
+    // Like the other breakdowns, this chart ignores its own filter and dims the other bars.
+    const pool = FILMS.filter((f) => passes(f, "topic"));
+    const counts = {};
+    for (const f of pool) for (const c of f.tp) counts[c] = (counts[c] || 0) + 1;
+    const cats = TOPICS.map((x) => x.code).filter((c) => counts[c]).sort((a, b) => counts[b] - counts[a]).slice(0, 15);
+    if (S.topic && counts[S.topic] && !cats.includes(S.topic)) cats.push(S.topic);
+    const types = S.type ? [S.type] : TYPES;
+    const series = stackedSeries(cats, (ty, c) => pool.filter((f) => f.ty === ty && f.tp.includes(c)).length, true, types);
+    if (S.topic) series.forEach((s) => s.data.forEach((d, i) => { d.itemStyle = { ...(d.itemStyle || {}), opacity: cats[i] === S.topic ? 1 : 0.3 }; }));
+    const el = $("#chTopics");
+    el.style.height = Math.max(120, cats.length * 26 + 30) + "px";
+    const c = chart("chTopics");
+    c.setOption({
+      ...base(),
+      grid: { left: 8, right: 16, top: 4, bottom: 4, containLabel: true },
+      tooltip: { ...base().tooltip, trigger: "axis", axisPointer: { type: "shadow", shadowStyle: { color: css("--wash") } },
+        formatter: (p) => stackTooltip(p, p[0].name) },
+      xAxis: valueAxis({ minInterval: 1, splitNumber: 4 }),
+      yAxis: catAxis(cats.map(topicLabel), { inverse: true, axisLine: { show: false }, axisLabel: { color: css("--ink-2"), fontSize: 12 } }),
+      series,
+      graphic: cats.length ? [] : [{ type: "text", left: "center", top: "middle", style: { text: t("empty"), fill: css("--muted"), fontSize: 13 } }],
+    }, true);
+    c.off("click");
+    c.on("click", (p) => { const v = cats[p.dataIndex]; S.topic = S.topic === v ? "" : v; S.shown = 25; render(); });
+    el.setAttribute("aria-label", t("c_topics"));
+  }
+
   function sortRows(rows) {
     const { key: k, dir } = S.sort;
-    const val = (f) => (k === "c" ? f.c.join(",") : k === "ty" || k === "g" || k === "r" ? tv(f[k]) : f[k]);
+    const val = (f) => (k === "c" ? f.c.join(",") : k === "tp" ? (f.tp.length ? topicLabel(f.tp[0]) : null)
+      : k === "dir" ? (f.dir || null) : k === "ty" || k === "g" || k === "r" ? tv(f[k]) : f[k]);
     return [...rows].sort((a, b) => {
       const x = val(a), y = val(b);
       if (x == null) return 1; if (y == null) return -1;
@@ -456,19 +517,54 @@
       th.setAttribute("aria-sort", th.dataset.sort === S.sort.key ? (S.sort.dir > 0 ? "ascending" : "descending") : "none");
     });
     const tb = $("#table tbody");
+    const COLS = 7;
     if (!rows.length) {
       const tr = document.createElement("tr"); const td = document.createElement("td");
-      td.colSpan = 8; td.className = "empty"; td.textContent = t("empty"); tr.append(td); tb.replaceChildren(tr);
+      td.colSpan = COLS; td.className = "empty"; td.textContent = t("empty"); tr.append(td); tb.replaceChildren(tr);
     } else {
-      tb.replaceChildren(...sorted.slice(0, S.shown).map((f) => {
+      tb.replaceChildren(...sorted.slice(0, S.shown).flatMap((f) => {
+        const open = S.open.has(f.id);
         const tr = document.createElement("tr");
+        tr.className = "row" + (open ? " open" : "");
         const cell = (text, cls) => { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; return td; };
+
+        const titleCell = cell("");
+        const btn = document.createElement("button");
+        btn.type = "button"; btn.className = "expander"; btn.textContent = open ? "▾" : "▸";
+        btn.setAttribute("aria-expanded", String(open)); btn.setAttribute("aria-label", t("expand"));
+        titleCell.append(btn, document.createTextNode(f.t));
+
         const tyCell = cell(""); const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = typeColor(f.ty);
         tyCell.append(dot, document.createTextNode(tv(f.ty)));
-        const titleCell = cell(f.t); if (f.o && f.o !== f.t) titleCell.title = f.o;
-        tr.append(titleCell, cell(dateFmt(f.d)), tyCell, cell(f.m ?? "–", "num"), cell(tv(f.g)), cell(tv(f.r)),
-          cell(f.c.map(country).join(", ")), cell(fmt(f.a), "num"));
-        return tr;
+
+        const tpCell = cell("", "chips-cell");
+        for (const code of f.tp) {
+          const chip = document.createElement("span"); chip.className = "chip"; chip.textContent = topicLabel(code);
+          tpCell.append(chip);
+        }
+        if (!f.tp.length) tpCell.textContent = "–";
+
+        tr.append(titleCell, cell(dateFmt(f.d)), tyCell, cell(f.dir || "–", "dir"), cell(tv(f.g)), tpCell, cell(fmt(f.a), "num"));
+        tr.addEventListener("click", () => {
+          S.open.has(f.id) ? S.open.delete(f.id) : S.open.add(f.id);
+          renderTable(FILMS.filter((x) => passes(x)));
+        });
+        if (!open) return [tr];
+
+        const dr = document.createElement("tr"); dr.className = "detail";
+        const td = document.createElement("td"); td.colSpan = COLS;
+        const h = document.createElement("h3"); h.textContent = t("syn");
+        const syn = document.createElement("p"); syn.className = "syn"; syn.textContent = f.syn || t("syn_none");
+        const meta = document.createElement("p"); meta.className = "meta";
+        meta.textContent = [
+          f.o && f.o !== f.t ? `${t("d_original")}: ${f.o}` : "",
+          f.m ? `${t("d_min")}: ${t("minutes", { n: f.m })}` : "",
+          `${t("th_rating")}: ${tv(f.r)}`,
+          `${t("th_country")}: ${f.c.map(country).join(", ")}`,
+          f.p ? `${t("d_applicant")}: ${f.p}` : "",
+        ].filter(Boolean).join(" · ");
+        td.append(h, syn, meta); dr.append(td);
+        return [tr, dr];
       }));
     }
     $("#more").hidden = S.shown >= rows.length;
@@ -476,10 +572,11 @@
 
   function downloadCsv() {
     const rows = sortRows(FILMS.filter((f) => passes(f)));
-    const head = ["th_title", "th_date", "th_type", "th_min", "th_genre", "th_rating", "th_country", "th_adm"].map(t);
+    const head = ["th_title", "th_date", "th_type", "th_min", "th_dir", "th_genre", "th_rating", "th_country", "th_topics", "th_adm", "syn"].map(t);
     const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = [head.map(q).join(",")].concat(rows.map((f) =>
-      [f.t, f.d, tv(f.ty), f.m, tv(f.g), tv(f.r), f.c.map(country).join(", "), f.a].map(q).join(",")));
+      [f.t, f.d, tv(f.ty), f.m, f.dir, tv(f.g), tv(f.r), f.c.map(country).join(", "), f.tp.map(topicLabel).join("; "), f.a, f.syn]
+        .map(q).join(",")));
     const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -498,11 +595,11 @@
     $$("#granSeg button").forEach((b) => b.addEventListener("click", () => { S.gran = b.dataset.gran; render(); }));
     $$("#topTypeSeg button").forEach((b) => b.addEventListener("click", () => { S.topType = b.dataset.top; render(); }));
     $$("#topNSeg button").forEach((b) => b.addEventListener("click", () => { S.topN = +b.dataset.n; render(); }));
-    for (const id of ["genre", "rating", "prod"]) $("#" + id).addEventListener("change", (e) => { S[id] = e.target.value; S.shown = 25; render(); });
+    for (const id of ["genre", "rating", "prod", "topic"]) $("#" + id).addEventListener("change", (e) => { S[id] = e.target.value; S.shown = 25; render(); });
     let timer;
     $("#search").addEventListener("input", (e) => { clearTimeout(timer); timer = setTimeout(() => { S.q = norm(e.target.value.trim()); S.shown = 25; render(); }, 150); });
     $("#reset").addEventListener("click", () => {
-      Object.assign(S, { type: "", genre: "", rating: "", prod: "", q: "", shown: 25, topType: "Largometraje" });
+      Object.assign(S, { type: "", genre: "", rating: "", prod: "", topic: "", q: "", shown: 25, topType: "Largometraje" });
       $("#search").value = ""; applyPreset("all"); render();
     });
     $$("#table th").forEach((th) => th.addEventListener("click", () => {
@@ -517,12 +614,23 @@
 
   async function init() {
     renderStatic();
+    const getJson = (url) => fetch(url, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
     try {
-      const res = await fetch("data/films.json", { cache: "no-cache" });
-      if (!res.ok) throw new Error(res.status);
-      const data = await res.json();
+      // Topics are optional: the dashboard works without them (e.g. before the first tagging run).
+      const [data, tax, tags] = await Promise.all([
+        getJson("data/films.json"),
+        getJson("data/taxonomy.json").catch(() => null),
+        getJson("data/topics.json").catch(() => null),
+      ]);
       META = data.meta || {};
-      FILMS = data.films.map((f) => ({ ...f, _s: norm(f.t + " " + f.o) }));
+      TOPICS = tax?.topics || [];
+      const known = new Set(TOPICS.map((x) => x.code));
+      const tagOf = (id) => (tags?.films?.[id]?.t || []).filter((c) => known.has(c));
+      FILMS = data.films.map((f) => ({
+        ...f, dir: f.dir || "", syn: f.syn || "", tp: tagOf(f.id),
+        _s: norm(`${f.t} ${f.o} ${f.dir || ""}`),
+      }));
+      HAS_TOPICS = FILMS.some((f) => f.tp.length);
     } catch (e) {
       const l = $("#loading"); l.textContent = t("load_error"); l.classList.add("error");
       return;

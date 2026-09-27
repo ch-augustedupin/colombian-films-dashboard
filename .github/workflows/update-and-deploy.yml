@@ -5,6 +5,11 @@ on:
     # Every Thursday at 17:00 UTC (12:00 Bogotá).
     - cron: "0 17 * * 4"
   workflow_dispatch:
+    inputs:
+      backfill:
+        description: "Tag all pending synopses with the Batch API (one-time backfill)"
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -31,14 +36,20 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Download and convert MinCultura Excel
         run: python scripts/update_data.py
+      - name: Tag synopsis topics with Claude
+        # A tagging problem must never block the data refresh.
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/tag_topics.py ${{ inputs.backfill && '--batch' || '' }}
       - name: Commit data if it changed
         run: |
-          if git diff --quiet -- docs/data; then
+          git add docs/data
+          if git diff --cached --quiet; then
             echo "Data unchanged."
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add docs/data
             git commit -m "data: weekly refresh $(date -u +%Y-%m-%d)"
             git push
           fi

@@ -60,8 +60,12 @@
       <span class="flabel" data-i18n="f_prod">Producción</span>
       <select id="prod"></select>
     </label>
+    <label class="filter" id="topicFilter" hidden>
+      <span class="flabel" data-i18n="f_topic">Tema</span>
+      <select id="topic"></select>
+    </label>
     <label class="filter grow">
-      <span class="flabel" data-i18n="f_search">Buscar título</span>
+      <span class="flabel" data-i18n="f_search">Buscar título o director</span>
       <input id="search" type="search" autocomplete="off">
     </label>
     <button type="button" class="reset" id="reset" data-i18n="reset">Limpiar filtros</button>
@@ -158,6 +162,23 @@
         <div class="chart short" id="chRating" role="img"></div>
       </article>
 
+      <article class="card span2" id="topicsCard" hidden>
+        <header class="card-head">
+          <div>
+            <h2 data-i18n="c_topics">Temas más frecuentes</h2>
+            <p class="hint" data-i18n="c_topics_hint">Temas identificados en la sinopsis de cada película · clic para filtrar</p>
+          </div>
+        </header>
+        <div class="legend" id="legTopics"></div>
+        <div class="chart" id="chTopics" role="img"></div>
+      </article>
+
+      <article class="card note" id="aiCard" hidden>
+        <h2 data-i18n="ai_title">¿De dónde salen los temas?</h2>
+        <p id="aiBody"></p>
+        <p class="stat" id="aiStats"></p>
+      </article>
+
       <article class="card span3">
         <header class="card-head">
           <div>
@@ -184,10 +205,9 @@
                 <th data-sort="t" data-i18n="th_title">Título</th>
                 <th data-sort="d" data-i18n="th_date">Estreno</th>
                 <th data-sort="ty" data-i18n="th_type">Duración</th>
-                <th data-sort="m" class="num" data-i18n="th_min">Min.</th>
+                <th data-sort="dir" data-i18n="th_dir">Dirección</th>
                 <th data-sort="g" data-i18n="th_genre">Género</th>
-                <th data-sort="r" data-i18n="th_rating">Clasificación</th>
-                <th data-sort="c" data-i18n="th_country">Nacionalidad</th>
+                <th data-sort="tp" data-i18n="th_topics">Temas</th>
                 <th data-sort="a" class="num" data-i18n="th_adm">Admisiones</th>
               </tr>
             </thead>

@@ -1,10 +1,15 @@
-"""Download MinCultura's "HISTORICO Estrenos Colombia.xlsx" and write docs/data/films.json.
+"""Download MinCultura's SIREC Excel files and write docs/data/films.json.
 
-The file lives in a SharePoint folder shared anonymously ("anyone with the link").
+Sources (both in a SharePoint folder shared anonymously, "anyone with the link"):
+- "HISTORICO Estrenos Colombia.xlsx": Colombian releases with admissions (the base dataset).
+- "TITULOS CLASIFICADOS_REGISTRADOS.xlsx": every classified title, domestic and
+  international, with director and synopsis. Joined onto the base by acta number.
+
 Opening the share link grants a guest session cookie, which is then used to read
-the file through the SharePoint REST API.
+the files through the SharePoint REST API.
 
-Exit codes: 0 = ok (data written or unchanged), 1 = download/schema error.
+Exit codes: 0 = ok (data written or unchanged), 1 = download/schema error in the
+base file. A failure in the titles file only reuses the previous director/synopsis.
 """
 
 from __future__ import annotations
@@ -26,15 +31,21 @@ SHARE_LINK = (
     "https://mcultura-my.sharepoint.com/:f:/g/personal/sirec_mincultura_gov_co/"
     "EvK4Z0jd1G1Mvgu94k1L5YsB4IpRICiX41MTdYZtm8Pk8Q"
 )
-FILE_PATH = (
-    "/personal/sirec_mincultura_gov_co/Documents/SIREC - INFORMACION PUBLICA/"
-    "INFORMACIÓN - DATOS HISTÓRICOS/HISTORICO Estrenos Colombia.xlsx"
-)
-# Fallback if the folder path is renamed but the file itself is kept.
-FILE_ID = "E3D2B647-A63E-49EF-81CB-679BCE2F032B"
-SHEET = "ESTRENOS Consolidado"
+DOCS = "/personal/sirec_mincultura_gov_co/Documents/SIREC - INFORMACION PUBLICA"
 
-# Expected headers (row 2 of the sheet), whitespace-normalised, in order.
+# Each source is looked up by path first, then by id (if the folder is renamed).
+RELEASES = {
+    "path": f"{DOCS}/INFORMACIÓN - DATOS HISTÓRICOS/HISTORICO Estrenos Colombia.xlsx",
+    "id": "E3D2B647-A63E-49EF-81CB-679BCE2F032B",
+    "sheet": "ESTRENOS Consolidado",
+}
+TITLES = {
+    "path": f"{DOCS}/TITULOS CLASIFICADOS_REGISTRADOS.xlsx",
+    "id": "2d27c371-5b5a-44d1-bb45-bb9822982e85",
+    "sheet": "TITULOS REGISTRADOS",
+}
+
+# Expected headers (row 2 of the releases sheet), whitespace-normalised, in order.
 EXPECTED = [
     "AÑO Estreno",
     "Fecha 1ra Exhibición",
@@ -50,6 +61,8 @@ EXPECTED = [
     "Solicitud clasificación por",
     "Admisiones",
 ]
+TITLES_ACTA = "Acta Clasificación/ Cod Exhibición"
+TITLES_REQUIRED = [TITLES_ACTA, "Director", "Sinopsis"]
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "data" / "films.json"
 UA = {"User-Agent": "Mozilla/5.0 (colombian-films-dashboard updater)"}
@@ -59,37 +72,44 @@ def norm(s: object) -> str:
     return re.sub(r"\s+", " ", str(s)).strip()
 
 
-def fetch() -> tuple[bytes, str | None]:
-    """Return (xlsx bytes, SharePoint last-modified ISO string)."""
+def text(v: object) -> str:
+    return norm(v) if pd.notna(v) else ""
+
+
+def guest_session() -> requests.Session:
     s = requests.Session()
     s.headers.update(UA)
     r = s.get(SHARE_LINK, timeout=60)
     r.raise_for_status()
     if "FedAuth" not in s.cookies:
         raise RuntimeError("Share link did not grant a guest session (link revoked?)")
+    return s
 
-    api_by_path = f"{SITE}/_api/web/GetFileByServerRelativeUrl('{quote(FILE_PATH)}')"
-    api_by_id = f"{SITE}/_api/web/GetFileById('{FILE_ID}')"
+
+def fetch(s: requests.Session, src: dict) -> tuple[bytes, str | None]:
+    """Return (xlsx bytes, SharePoint last-modified ISO string)."""
+    api_by_path = f"{SITE}/_api/web/GetFileByServerRelativeUrl('{quote(src['path'])}')"
+    api_by_id = f"{SITE}/_api/web/GetFileById('{src['id']}')"
     json_hdr = {"Accept": "application/json;odata=nometadata"}
     for api in (api_by_path, api_by_id):
         meta = s.get(api, headers=json_hdr, timeout=60)
         if meta.status_code != 200:
             continue
-        content = s.get(f"{api}/$value", timeout=120)
+        content = s.get(f"{api}/$value", timeout=180)
         if content.status_code == 200 and content.content[:2] == b"PK":
             return content.content, meta.json().get("TimeLastModified")
-    raise RuntimeError("Could not download the Excel file by path or by id")
+    raise RuntimeError(f"Could not download {src['path'].rsplit('/', 1)[-1]} by path or by id")
 
 
 def split_countries(s: str) -> list[str]:
     return [c.strip() for c in s.split(",") if c.strip()]
 
 
-def parse(xlsx: bytes) -> tuple[list[dict], str | None]:
-    df = pd.read_excel(io.BytesIO(xlsx), sheet_name=SHEET, header=1)
+def parse_releases(xlsx: bytes) -> tuple[list[dict], str | None]:
+    df = pd.read_excel(io.BytesIO(xlsx), sheet_name=RELEASES["sheet"], header=1)
     headers = [norm(c) for c in df.columns]
     if headers[: len(EXPECTED)] != EXPECTED:
-        raise RuntimeError(f"Unexpected columns in '{SHEET}':\n{headers}")
+        raise RuntimeError(f"Unexpected columns in '{RELEASES['sheet']}':\n{headers}")
 
     # The 14th header carries the extraction date, e.g. "Fecha Descarga 25/09/2026".
     extracted = None
@@ -109,32 +129,68 @@ def parse(xlsx: bytes) -> tuple[list[dict], str | None]:
 
     films = []
     for r in df.itertuples(index=False):
-        date = pd.to_datetime(r.date)
-        countries = split_countries(norm(r.nationality)) if pd.notna(r.nationality) else []
         films.append({
-            "d": date.strftime("%Y-%m-%d"),
+            "id": int(r.acta) if pd.notna(r.acta) else None,
+            "d": pd.to_datetime(r.date).strftime("%Y-%m-%d"),
             "t": norm(r.title),
-            "o": norm(r.original) if pd.notna(r.original) else "",
+            "o": text(r.original),
             "ty": norm(r.type),
             "m": int(r.minutes) if pd.notna(r.minutes) else None,
-            "g": norm(r.genre) if pd.notna(r.genre) else "",
-            "r": norm(r.rating) if pd.notna(r.rating) else "",
-            "c": countries,
-            "mc": norm(r.main_country) if pd.notna(r.main_country) else "",
-            "p": norm(r.applicant) if pd.notna(r.applicant) else "",
+            "g": text(r.genre),
+            "r": text(r.rating),
+            "c": split_countries(text(r.nationality)),
+            "mc": text(r.main_country),
+            "p": text(r.applicant),
             "a": int(r.admissions) if pd.notna(r.admissions) else 0,
         })
     films.sort(key=lambda f: (f["d"], f["t"]), reverse=True)
     return films, extracted
 
 
+def parse_titles(xlsx: bytes) -> dict[int, dict]:
+    """Map acta -> {"dir", "syn"} from the classified-titles register."""
+    df = pd.read_excel(io.BytesIO(xlsx), sheet_name=TITLES["sheet"], header=5)
+    df.columns = [norm(c) for c in df.columns]
+    missing = [c for c in TITLES_REQUIRED if c not in df.columns]
+    if missing:
+        raise RuntimeError(f"Missing columns {missing} in '{TITLES['sheet']}': {list(df.columns)}")
+    df[TITLES_ACTA] = pd.to_numeric(df[TITLES_ACTA], errors="coerce")
+    df = df.dropna(subset=[TITLES_ACTA]).drop_duplicates(TITLES_ACTA, keep="first")
+    return {
+        int(r[TITLES_ACTA]): {"dir": text(r["Director"]), "syn": text(r["Sinopsis"])}
+        for _, r in df.iterrows()
+    }
+
+
+def previous_details() -> dict[int, dict]:
+    if not OUT.exists():
+        return {}
+    old = json.loads(OUT.read_text(encoding="utf-8"))
+    return {f["id"]: {"dir": f.get("dir", ""), "syn": f.get("syn", "")}
+            for f in old.get("films", []) if f.get("id") is not None}
+
+
 def main() -> int:
     try:
-        xlsx, modified = fetch()
-        films, extracted = parse(xlsx)
+        s = guest_session()
+        xlsx, modified = fetch(s, RELEASES)
+        films, extracted = parse_releases(xlsx)
     except Exception as e:  # noqa: BLE001 - surface any failure to the workflow
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
+
+    try:
+        details = parse_titles(fetch(s, TITLES)[0])
+    except Exception as e:  # noqa: BLE001 - keep the refresh going with last known details
+        print(f"::warning::Titles register unavailable, reusing previous director/synopsis: {e}")
+        details = previous_details()
+
+    for f in films:
+        extra = details.get(f["id"], {})
+        f["dir"] = extra.get("dir", "")
+        f["syn"] = extra.get("syn", "")
+    matched = sum(1 for f in films if f["id"] in details)
+    print(f"Director/synopsis matched for {matched}/{len(films)} films.")
 
     digest = hashlib.sha256(json.dumps(films, ensure_ascii=False).encode()).hexdigest()
     if OUT.exists():
