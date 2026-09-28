@@ -36,7 +36,22 @@ python -m http.server 8765 --directory docs   # preview (also in .claude/launch.
 - Estimated cost of tagging (Sonnet 5): backfill of ~1,419 synopses ≈ 244k in / 35k out ≈ $0.84 ($0.42 with --batch);
   weekly increments < $0.01. Changing a taxonomy code does NOT retag old films automatically — clear topics.json to redo them.
 
+## Whole-market data (v3, `docs/data/market.json`, written by `update_data.py`)
+- `HISTORICO Exhibicion_Por_Dia.xlsx` → sheet `Historico x Día` (header row 2): daily admissions + revenue (COP millions)
+  for ALL films since 2007, updated ~monthly. Aggregated client-side to week/month/quarter/year.
+- `HISTORICO Estrenos Total.xlsx` → `ESTRENOS` (all releases, domestic + foreign): feature films only, grouped by
+  release year and main producing country (CO / US / OT). `Detalle Largometrajes` (header row 3): screens by exhibition
+  year since 2020; 2023–2024 list only Colombian titles → flagged `complete: false`, shown as no data.
+- SIREC does NOT publish revenue or weekly figures per film: revenue/weekly views are whole-market; Colombian films
+  appear as a share. Shares exclude shorts (they would inflate Colombia to 30–40%; features-only is ~1.6–2%).
+- Market failures are non-fatal (previous market.json kept). The market section only follows the period filter.
+
 ## Design decisions
+- v3: the dashboard opens on feature films (`S.type = "Largometraje"`); shorts via the Duración filter and a closed
+  "Largometrajes y cortometrajes" section at the bottom. No rating filter. Period = date inputs + "Todo"/"Este año".
+- Light/dark switch (`data-theme` on <html>, saved in localStorage "theme", applied pre-paint in index.html).
+- Colors: Colombia `--co` aqua, US `--us` violet, other countries `--ot` neutral gray, whole market `--mk` gray.
+- The film table scrolls inside `.table-wrap` (max-height) so its sticky header row stays visible.
 - Short films' admissions are ~10x features' (shorts are screened before other films), so "Top films" defaults to
   feature films with a toggle, and "Admisiones por año" starts with shorts hidden. Keep them separated.
 - Colors: feature = slot 1 blue (`--s1`), short = slot 2 orange (`--s2`), defined as CSS tokens with dark-mode variants; charts read tokens at render time.

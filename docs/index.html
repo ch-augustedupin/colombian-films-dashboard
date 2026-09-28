@@ -7,6 +7,10 @@
   <meta name="description" content="Dashboard interactivo de estrenos de películas colombianas en salas y sus admisiones. Fuente: SIREC – MinCulturas.">
   <meta name="author" content="Simón Moreno Salinas">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><rect x='7' y='17' width='4' height='8' rx='1' fill='white'/><rect x='14' y='11' width='4' height='14' rx='1' fill='white'/><rect x='21' y='7' width='4' height='18' rx='1' fill='white'/></svg>">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js" defer></script>
   <script src="app.js" defer></script>
@@ -17,9 +21,15 @@
       <h1 data-i18n="title">Cine colombiano en taquilla</h1>
       <p class="subtitle"><span data-i18n="subtitle">Estrenos colombianos en salas de cine nacionales</span> · <span id="asof"></span></p>
     </div>
-    <div class="lang" role="group" aria-label="Idioma / Language">
-      <button type="button" data-lang="es" aria-pressed="true">ES</button>
-      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    <div class="toggles">
+      <button type="button" class="theme-btn" id="themeBtn" aria-label="Modo claro / oscuro">
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></svg>
+      </button>
+      <div class="lang" role="group" aria-label="Idioma / Language">
+        <button type="button" data-lang="es" aria-pressed="true">ES</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
     </div>
   </header>
 
@@ -27,34 +37,28 @@
     <div class="filter period">
       <span class="flabel" data-i18n="f_period">Periodo</span>
       <div class="period-row">
-      <div class="chips" id="presets">
-        <button type="button" data-preset="all" data-i18n="p_all">Todo</button>
-        <button type="button" data-preset="12m" data-i18n="p_12m">Últimos 12 meses</button>
-        <button type="button" data-preset="ytd" data-i18n="p_ytd">Este año</button>
-        <button type="button" data-preset="5y" data-i18n="p_5y">Últimos 5 años</button>
-      </div>
-      <div class="range">
-        <label><span class="sr" data-i18n="f_from">Desde</span><select id="fromYear"></select></label>
-        <span aria-hidden="true">–</span>
-        <label><span class="sr" data-i18n="f_to">Hasta</span><select id="toYear"></select></label>
-      </div>
+        <div class="chips" id="presets">
+          <button type="button" data-preset="all" data-i18n="p_all">Todo</button>
+          <button type="button" data-preset="ytd" data-i18n="p_ytd">Este año</button>
+        </div>
+        <div class="range">
+          <label><span class="sr" data-i18n="f_from">Desde</span><input type="date" id="fromDate"></label>
+          <span aria-hidden="true">–</span>
+          <label><span class="sr" data-i18n="f_to">Hasta</span><input type="date" id="toDate"></label>
+        </div>
       </div>
     </div>
     <div class="filter">
       <span class="flabel" data-i18n="f_type">Duración</span>
       <div class="seg" id="typeSeg">
+        <button type="button" data-type="Largometraje" data-i18n="Largometraje_pl">Largometrajes</button>
+        <button type="button" data-type="Cortometraje" data-i18n="Cortometraje_pl">Cortometrajes</button>
         <button type="button" data-type="" data-i18n="all_f">Todas</button>
-        <button type="button" data-type="Largometraje" data-i18n="Largometraje">Largometraje</button>
-        <button type="button" data-type="Cortometraje" data-i18n="Cortometraje">Cortometraje</button>
       </div>
     </div>
     <label class="filter">
       <span class="flabel" data-i18n="f_genre">Género</span>
       <select id="genre"></select>
-    </label>
-    <label class="filter">
-      <span class="flabel" data-i18n="f_rating">Clasificación</span>
-      <select id="rating"></select>
     </label>
     <label class="filter">
       <span class="flabel" data-i18n="f_prod">Producción</span>
@@ -79,24 +83,24 @@
         <p class="note" id="kFilmsNote"></p>
       </article>
       <article class="kpi">
-        <h2 data-i18n="k_adm">Admisiones totales</h2>
+        <h2 data-i18n="k_adm">Admisiones de estas películas</h2>
         <p class="value" id="kAdm">–</p>
         <p class="note" id="kAdmNote"></p>
-      </article>
-      <article class="kpi">
-        <h2 data-i18n="k_features">Largometrajes</h2>
-        <p class="value" id="kFeat">–</p>
-        <p class="note" id="kFeatNote"></p>
-      </article>
-      <article class="kpi">
-        <h2 data-i18n="k_shorts">Cortometrajes</h2>
-        <p class="value" id="kShort">–</p>
-        <p class="note" id="kShortNote"></p>
       </article>
       <article class="kpi">
         <h2 data-i18n="k_median">Mediana de admisiones por largometraje</h2>
         <p class="value" id="kMedian">–</p>
         <p class="note" id="kMedianNote"></p>
+      </article>
+      <article class="kpi">
+        <h2 data-i18n="k_share">Cuota del cine colombiano</h2>
+        <p class="value" id="kShare">–</p>
+        <p class="note" id="kShareNote"></p>
+      </article>
+      <article class="kpi">
+        <h2 data-i18n="k_market">Admisiones de todo el mercado</h2>
+        <p class="value" id="kMarket">–</p>
+        <p class="note" id="kMarketNote"></p>
       </article>
     </section>
 
@@ -119,13 +123,12 @@
       <article class="card">
         <header class="card-head">
           <div>
-            <h2 data-i18n="c_type">Películas por duración</h2>
+            <h2 data-i18n="c_genre">Películas por género</h2>
             <p class="hint" data-i18n="c_type_hint">Clic para filtrar</p>
           </div>
         </header>
-        <div class="chart short" id="chType" role="img"></div>
-        <h2 class="sub" data-i18n="c_typeadm">Admisiones por duración</h2>
-        <div class="chart short" id="chTypeAdm" role="img"></div>
+        <div class="legend" id="legGenre"></div>
+        <div class="chart" id="chGenre" role="img"></div>
       </article>
 
       <article class="card span2">
@@ -135,10 +138,6 @@
             <p class="hint" id="topHint"></p>
           </div>
           <div class="controls">
-            <div class="seg small" id="topTypeSeg">
-              <button type="button" data-top="Largometraje" data-i18n="Largometraje_pl">Largometrajes</button>
-              <button type="button" data-top="Cortometraje" data-i18n="Cortometraje_pl">Cortometrajes</button>
-            </div>
             <div class="seg small" id="topNSeg">
               <button type="button" data-n="10">10</button>
               <button type="button" data-n="20">20</button>
@@ -146,23 +145,10 @@
           </div>
         </header>
         <div class="chart tall" id="chTop" role="img"></div>
-        <p class="footnote" data-i18n="short_note">Los cortometrajes suelen proyectarse antes de otras películas en las salas, por lo que sus admisiones reflejan esas funciones. Compárelos por separado de los largometrajes.</p>
+        <p class="footnote" id="topNote" data-i18n="short_note">Los cortometrajes suelen proyectarse antes de otras películas en las salas, por lo que sus admisiones reflejan esas funciones. Compárelos por separado de los largometrajes.</p>
       </article>
 
-      <article class="card">
-        <header class="card-head">
-          <div>
-            <h2 data-i18n="c_genre">Películas por género</h2>
-            <p class="hint" data-i18n="c_type_hint">Clic para filtrar</p>
-          </div>
-        </header>
-        <div class="legend" id="legGenre"></div>
-        <div class="chart short" id="chGenre" role="img"></div>
-        <h2 class="sub" data-i18n="c_rating">Películas por clasificación</h2>
-        <div class="chart short" id="chRating" role="img"></div>
-      </article>
-
-      <article class="card span2" id="topicsCard" hidden>
+      <article class="card" id="topicsCard" hidden>
         <header class="card-head">
           <div>
             <h2 data-i18n="c_topics">Temas más frecuentes</h2>
@@ -171,12 +157,11 @@
         </header>
         <div class="legend" id="legTopics"></div>
         <div class="chart" id="chTopics" role="img"></div>
-      </article>
-
-      <article class="card note" id="aiCard" hidden>
-        <h2 data-i18n="ai_title">¿De dónde salen los temas?</h2>
-        <p id="aiBody"></p>
-        <p class="stat" id="aiStats"></p>
+        <details class="ai-note">
+          <summary data-i18n="ai_title">¿De dónde salen los temas?</summary>
+          <p id="aiBody"></p>
+        </details>
+        <p class="footnote" id="aiStats"></p>
       </article>
 
       <article class="card span3">
@@ -189,7 +174,64 @@
         <div class="legend" id="legAdm"></div>
         <div class="chart" id="chAdm" role="img"></div>
       </article>
+    </section>
 
+    <section class="section-head" id="marketHead" hidden>
+      <h2 data-i18n="s_market">El mercado de cine en Colombia</h2>
+      <p data-i18n="s_market_hint">Todas las películas exhibidas en el país, colombianas y extranjeras. Esta sección solo responde al filtro de periodo.</p>
+    </section>
+
+    <section class="grid" id="marketGrid" hidden>
+      <article class="card span3">
+        <header class="card-head">
+          <div>
+            <h2 id="mkTitle"></h2>
+            <p class="hint" id="mkHint"></p>
+          </div>
+          <div class="controls">
+            <div class="seg small" id="mkMetricSeg">
+              <button type="button" data-metric="a" data-i18n="m_adm">Admisiones</button>
+              <button type="button" data-metric="r" data-i18n="m_rev">Ingresos</button>
+              <button type="button" data-metric="p" data-i18n="m_price">Precio promedio</button>
+            </div>
+            <div class="seg small" id="mkGranSeg">
+              <button type="button" data-mgran="week" data-i18n="g_week">Semana</button>
+              <button type="button" data-mgran="month" data-i18n="g_month">Mes</button>
+              <button type="button" data-mgran="quarter" data-i18n="g_quarter">Trimestre</button>
+              <button type="button" data-mgran="year" data-i18n="g_year">Año</button>
+            </div>
+          </div>
+        </header>
+        <div class="chart" id="chMarket" role="img"></div>
+      </article>
+
+      <article class="card span2">
+        <header class="card-head">
+          <div>
+            <h2 data-i18n="c_share">Colombia frente al cine extranjero</h2>
+            <p class="hint" id="shareHint"></p>
+          </div>
+          <div class="seg small" id="shareSeg">
+            <button type="button" data-share="a" data-i18n="sh_adm">Admisiones</button>
+            <button type="button" data-share="n" data-i18n="sh_titles">Estrenos</button>
+            <button type="button" data-share="s" data-i18n="sh_screens">Pantallas</button>
+          </div>
+        </header>
+        <div class="legend" id="legShare"></div>
+        <div class="chart" id="chShare" role="img"></div>
+      </article>
+
+      <article class="card note">
+        <h2 data-i18n="n_title">Cómo leer estas cifras</h2>
+        <p class="stat" id="shareStat"></p>
+        <p data-i18n="n_features">Las cuotas comparan solo largometrajes: las admisiones de los cortometrajes dependen de las películas que acompañan.</p>
+        <p data-i18n="n_origin">El origen de cada película es su país de mayor participación en la producción.</p>
+        <p data-i18n="n_screens">Pantallas: suma de las pantallas en que se exhibió cada largometraje durante el año, disponible desde 2020. El reporte de 2023 y 2024 solo incluye películas colombianas, por lo que esos años no tienen cuota.</p>
+        <p data-i18n="n_revenue">El SIREC no publica ingresos por película; los ingresos corresponden a todo el mercado.</p>
+      </article>
+    </section>
+
+    <section class="grid">
       <article class="card span3">
         <header class="card-head">
           <div>
@@ -216,6 +258,14 @@
         </div>
         <button type="button" class="ghost more" id="more" data-i18n="more">Mostrar más</button>
       </article>
+
+      <details class="card span3 shorts" id="shortsSection">
+        <summary>
+          <span class="sum-title" data-i18n="s_shorts">Largometrajes y cortometrajes</span>
+          <span class="hint" data-i18n="s_shorts_hint">Comparación por duración · clic en una barra para filtrar</span>
+        </summary>
+        <div class="chart short" id="chType" role="img"></div>
+      </details>
     </section>
   </main>
 

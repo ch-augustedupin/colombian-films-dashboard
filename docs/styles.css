@@ -12,6 +12,10 @@
   --accent: #2a78d6;
   --s1: #2a78d6; /* Largometraje */
   --s2: #eb6834; /* Cortometraje */
+  --co: #1baf7a; /* Colombian films (market section) */
+  --us: #4a3aa7; /* US films */
+  --ot: #c3c2b7; /* other countries: neutral, it is context */
+  --mk: #6b6a64; /* whole market series */
   --on-accent: #ffffff;
   --radius: 12px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -31,6 +35,10 @@
     --accent: #3987e5;
     --s1: #3987e5;
     --s2: #d95926;
+    --co: #199e70;
+    --us: #9085e9;
+    --ot: #4a4945;
+    --mk: #a3a29a;
   }
 }
 :root[data-theme="dark"] {
@@ -47,6 +55,10 @@
   --accent: #3987e5;
   --s1: #3987e5;
   --s2: #d95926;
+  --co: #199e70;
+  --us: #9085e9;
+  --ot: #4a4945;
+  --mk: #a3a29a;
 }
 
 * { box-sizing: border-box; }
@@ -76,6 +88,21 @@ a { color: var(--accent); }
   font-weight: 600; font-size: 13px; cursor: pointer; color: var(--ink-2);
 }
 .lang button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.toggles { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.theme-btn {
+  width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink-2);
+}
+.theme-btn:hover { color: var(--ink); background: var(--wash); }
+.theme-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+/* Show the icon of the mode you would switch to. */
+.theme-btn .i-sun { display: none; }
+:root[data-theme="dark"] .theme-btn .i-sun { display: block; }
+:root[data-theme="dark"] .theme-btn .i-moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .theme-btn .i-sun { display: block; }
+  :root:not([data-theme]) .theme-btn .i-moon { display: none; }
+}
 
 /* Filters: one row above the content they scope */
 .filters {
@@ -92,7 +119,7 @@ a { color: var(--accent); }
 .period .chips, .period .range { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .period-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .flabel { font-size: 12px; color: var(--ink-2); font-weight: 500; }
-select, input[type="search"] {
+select, input[type="search"], input[type="date"] {
   height: 32px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
   padding: 0 10px; min-width: 0;
 }
@@ -112,7 +139,7 @@ select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px s
 .seg button:last-child { border-radius: 0 8px 8px 0; }
 .seg.small button { height: 28px; padding: 0 10px; font-size: 13px; }
 .period .range { display: flex; }
-.range select { width: 88px; }
+.range input[type="date"] { width: 140px; }
 .reset { color: var(--ink-2); }
 
 main { max-width: 1440px; margin: 0 auto; padding: 16px 24px 8px; }
@@ -143,7 +170,28 @@ main { max-width: 1440px; margin: 0 auto; padding: 16px 24px 8px; }
 .controls { display: flex; gap: 8px; flex-wrap: wrap; }
 .chart { width: 100%; height: 300px; margin-top: 4px; }
 .chart.short { height: 150px; }
-#chType, #chTypeAdm { height: 110px; }
+#chType { height: 110px; }
+#chGenre { height: 250px; }
+
+/* Market section */
+.section-head { margin: 28px 0 10px; }
+.section-head h2 { font-size: 18px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+.section-head p { margin: 2px 0 0; color: var(--ink-2); font-size: 13px; }
+#marketGrid { margin-bottom: 12px; }
+.card.note h2 { margin-bottom: 8px; }
+.card.note p { margin: 0 0 8px; color: var(--ink-2); line-height: 1.5; font-size: 13px; }
+.card.note .stat { color: var(--ink); font-weight: 500; font-size: 14px; }
+
+/* Collapsible sections */
+.ai-note { margin-top: 8px; font-size: 12px; color: var(--ink-2); }
+.ai-note summary, details.shorts > summary { cursor: pointer; }
+.ai-note summary { color: var(--ink-2); font-weight: 500; }
+.ai-note p { margin: 6px 0 0; line-height: 1.5; }
+details.shorts { margin-top: 12px; }
+details.shorts > summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; list-style-position: outside; }
+details.shorts > summary .sum-title { font-size: 15px; font-weight: 600; }
+details.shorts > summary .hint { margin: 0; }
+details.shorts[open] > summary { margin-bottom: 4px; }
 .chart.tall { height: 420px; }
 .footnote { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 
@@ -152,11 +200,17 @@ main { max-width: 1440px; margin: 0 auto; padding: 16px 24px 8px; }
 .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 
 /* Table */
-.table-wrap { overflow-x: auto; margin-top: 8px; }
+/* The table scrolls inside its own box so the sticky header row stays in view. */
+.table-wrap { overflow: auto; margin-top: 8px; max-height: min(70vh, 720px); overscroll-behavior: contain; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 td:first-child { white-space: normal; min-width: 220px; font-weight: 500; }
-th { color: var(--ink-2); font-weight: 500; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface); }
+th {
+  color: var(--ink-2); font-weight: 500; cursor: pointer; user-select: none;
+  position: sticky; top: 0; z-index: 2; background: var(--surface);
+  /* Borders scroll away on sticky cells; a shadow line stays with the header. */
+  border-bottom: 0; box-shadow: inset 0 -1px 0 var(--axis);
+}
 th:hover { color: var(--ink); }
 th[aria-sort="ascending"]::after { content: " ▲"; font-size: 10px; }
 th[aria-sort="descending"]::after { content: " ▼"; font-size: 10px; }
@@ -182,10 +236,6 @@ tr.detail td > * { position: sticky; left: 34px; max-width: min(80ch, calc(100vw
 tr.detail h3 { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 0 0 4px; }
 tr.detail .syn { margin: 0 0 8px; line-height: 1.55; color: var(--ink); }
 tr.detail .meta { margin: 0; font-size: 12px; color: var(--muted); }
-
-.card.note h2 { margin-bottom: 8px; }
-.card.note p { margin: 0 0 10px; color: var(--ink-2); line-height: 1.55; }
-.card.note .stat { color: var(--ink); font-weight: 500; }
 .empty { color: var(--muted); padding: 24px 0; text-align: center; }
 
 .foot { max-width: 1440px; margin: 0 auto; padding: 8px 24px 32px; color: var(--muted); font-size: 12px; }

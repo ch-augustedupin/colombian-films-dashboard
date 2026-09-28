@@ -64,7 +64,21 @@ EXPECTED = [
 TITLES_ACTA = "Acta Clasificación/ Cod Exhibición"
 TITLES_REQUIRED = [TITLES_ACTA, "Director", "Sinopsis"]
 
+# Whole-market sources (all films shown in Colombia, not only Colombian ones).
+DAILY = {
+    "path": f"{DOCS}/INFORMACIÓN - DATOS HISTÓRICOS/HISTORICO Exhibicion_Por_Dia.xlsx",
+    "id": "7c119af2-df51-4244-95f7-2dd2239e471a",
+    "sheet": "Historico x Día",
+}
+ALL_RELEASES = {
+    "path": f"{DOCS}/INFORMACIÓN - DATOS HISTÓRICOS/HISTORICO Estrenos Total.xlsx",
+    "id": "5ef51d3f-4ade-408b-ae17-dfd6a483e5c1",
+    "sheet": "ESTRENOS",
+    "detail_sheet": "Detalle Largometrajes",
+}
+
 OUT = Path(__file__).resolve().parent.parent / "docs" / "data" / "films.json"
+MARKET_OUT = OUT.with_name("market.json")
 UA = {"User-Agent": "Mozilla/5.0 (colombian-films-dashboard updater)"}
 
 
@@ -162,6 +176,100 @@ def parse_titles(xlsx: bytes) -> dict[int, dict]:
     }
 
 
+def extraction_date(headers: list[str]) -> str | None:
+    for h in headers:
+        m = re.search(r"Descarga\s+(\d{1,2})/(\d{1,2})/(\d{4})", h)
+        if m:
+            return f"{m[3]}-{int(m[2]):02d}-{int(m[1]):02d}"
+    return None
+
+
+def origin(main_country: object) -> str:
+    """Group a film by its main producing country: CO, US or OT (other)."""
+    c = text(main_country).upper()
+    return "CO" if c == "COLOMBIA" else "US" if c == "ESTADOS UNIDOS" else "OT"
+
+
+def parse_daily(xlsx: bytes) -> dict:
+    df = pd.read_excel(io.BytesIO(xlsx), sheet_name=DAILY["sheet"], header=1)
+    df.columns = [norm(c) for c in df.columns]
+    need = ["Fecha", "Asistencia", "Taquilla (Millones)"]
+    if any(c not in df.columns for c in need):
+        raise RuntimeError(f"Unexpected columns in '{DAILY['sheet']}': {list(df.columns)}")
+    df = df.dropna(subset=["Fecha", "Asistencia"]).sort_values("Fecha")
+    if len(df) < 5000:
+        raise RuntimeError(f"Only {len(df)} daily rows parsed")
+    rows = [[pd.to_datetime(r.Fecha).strftime("%Y-%m-%d"), int(r.Asistencia), round(float(r[2]), 3)]
+            for r in df[need].itertuples(index=False)]
+    return {"extracted": extraction_date(list(df.columns)), "rows": rows}
+
+
+def parse_all_releases(xlsx: bytes) -> dict:
+    """Feature-film admissions/titles by release year and origin, plus screens by exhibition year."""
+    book = pd.ExcelFile(io.BytesIO(xlsx))
+    e = pd.read_excel(book, sheet_name=ALL_RELEASES["sheet"], header=1)
+    e.columns = [norm(c) for c in e.columns]
+    need = ["AÑO ESTRENO", "DURACIÓN (TIPO)", "NACIONALIDAD (MAYOR PARTICIPACIÓN)", "ADMISIONES"]
+    if any(c not in e.columns for c in need):
+        raise RuntimeError(f"Unexpected columns in '{ALL_RELEASES['sheet']}': {list(e.columns)}")
+    # Shorts are excluded: their admissions ride on the features they precede and would inflate shares.
+    e = e[e["DURACIÓN (TIPO)"].astype(str).str.strip() == "Largometraje"].dropna(subset=["AÑO ESTRENO"])
+    e["o"] = e["NACIONALIDAD (MAYOR PARTICIPACIÓN)"].map(origin)
+    by_year = []
+    for year, g in e.groupby("AÑO ESTRENO"):
+        by_year.append({
+            "y": int(year),
+            "a": {o: int(g.loc[g.o == o, "ADMISIONES"].fillna(0).sum()) for o in ("CO", "US", "OT")},
+            "n": {o: int((g.o == o).sum()) for o in ("CO", "US", "OT")},
+        })
+
+    d = pd.read_excel(book, sheet_name=ALL_RELEASES["detail_sheet"], header=2)
+    d.columns = [norm(c) for c in d.columns]
+    screens_col = "# PANTALLAS DE EXHIBICIÓN"
+    need_d = ["Año", "NACION", "NACIONALIDAD", "ADMISIONES", screens_col]
+    if any(c not in d.columns for c in need_d):
+        raise RuntimeError(f"Unexpected columns in '{ALL_RELEASES['detail_sheet']}': {list(d.columns)}")
+    d = d.dropna(subset=["Año"])
+    d["o"] = [
+        "CO" if text(n) == "Colombiana" else origin(text(nat).split(",")[0])
+        for n, nat in zip(d["NACION"], d["NACIONALIDAD"])
+    ]
+    screens = []
+    for year, g in d.groupby("Año"):
+        # Some years only list Colombian titles; a share is meaningless there.
+        complete = bool((g["NACION"].astype(str).str.strip() == "Extranjera").any())
+        screens.append({
+            "y": int(year),
+            "complete": complete,
+            "s": {o: int(g.loc[g.o == o, screens_col].fillna(0).sum()) for o in ("CO", "US", "OT")},
+            "a": {o: int(g.loc[g.o == o, "ADMISIONES"].fillna(0).sum()) for o in ("CO", "US", "OT")},
+        })
+    return {"extracted": extraction_date(list(e.columns)), "releases": by_year, "screens": screens}
+
+
+def write_market(s: requests.Session) -> None:
+    """Whole-market data is optional: on any failure keep the previous market.json."""
+    try:
+        daily = parse_daily(fetch(s, DAILY)[0])
+        rel = parse_all_releases(fetch(s, ALL_RELEASES)[0])
+    except Exception as e:  # noqa: BLE001
+        print(f"::warning::Market data unavailable, keeping previous market.json: {e}")
+        return
+    body = {"daily": daily["rows"], "releases": rel["releases"], "screens": rel["screens"]}
+    digest = hashlib.sha256(json.dumps(body).encode()).hexdigest()
+    if MARKET_OUT.exists() and json.loads(MARKET_OUT.read_text(encoding="utf-8")).get("meta", {}).get("sha256") == digest:
+        print("Market data unchanged.")
+        return
+    payload = {"meta": {
+        "daily_extracted": daily["extracted"], "daily_last": daily["rows"][-1][0],
+        "releases_extracted": rel["extracted"],
+        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "sha256": digest,
+    }, **body}
+    MARKET_OUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"Wrote market data: {len(daily['rows'])} days, {len(rel['releases'])} release years, "
+          f"{len(rel['screens'])} screen years.")
+
+
 def previous_details() -> dict[int, dict]:
     if not OUT.exists():
         return {}
@@ -191,6 +299,7 @@ def main() -> int:
         f["syn"] = extra.get("syn", "")
     matched = sum(1 for f in films if f["id"] in details)
     print(f"Director/synopsis matched for {matched}/{len(films)} films.")
+    write_market(s)
 
     digest = hashlib.sha256(json.dumps(films, ensure_ascii=False).encode()).hexdigest()
     if OUT.exists():
