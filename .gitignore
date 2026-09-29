@@ -4,3 +4,4 @@ __pycache__/
 *.xlsx
 .claude/settings.local.json
 desktop.ini
+presentation/out/
