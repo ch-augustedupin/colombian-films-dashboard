@@ -58,7 +58,9 @@ python -m http.server 8765 --directory docs   # preview (also in .claude/launch.
 - Map outlines: `docs/data/colombia-departments.geo.json` (33 departments, `code` + `name`, ~70 KB), built once by
   `scripts/build_geo.py` (needs shapely, not in requirements.txt) from John Guerra's DANE-derived gist. Credited in footer.
 - Map colours: 6 quantile-based pieces on the `--seq1..6` blue ramp (Bogotá is ~30% of admissions); no data = `--nodata`.
-  Admissions-per-screen uses the latest complete year, because screens are a current snapshot.
+  Darker = more in BOTH themes (user feedback). Map uses `aspectScale: 1` (the 0.75 default made Colombia look stretched).
+- Screens chart shows only screen counts (departments / top-15 cities). The user found "admissions per screen"
+  confusing and asked to remove it — don't reintroduce it.
 
 ## Design decisions
 - v3: the dashboard opens on feature films (`S.type = "Largometraje"`); shorts via the Duración filter and a closed

@@ -39,15 +39,14 @@
       s_regions_hint: "Admisiones de todas las películas por departamento y pantallas de cine registradas. Esta sección solo responde al filtro de periodo.",
       map_a: "Admisiones por departamento", map_r: "Ingresos de taquilla por departamento (COP)",
       map_hint: "Todo el mercado · {y} · clic en un departamento para ver sus ciudades",
-      scr_title_s: "Pantallas de cine activas", scr_title_aps: "Admisiones por pantalla",
+      scr_title_s: "Pantallas de cine activas",
       scr_hint_s: "Registro vigente de salas de cine ({d}) · 15 principales",
-      scr_hint_aps: "Admisiones de {y} divididas entre las pantallas activas hoy · 15 principales",
-      dim_dep: "Departamentos", dim_mun: "Ciudades", scr_s: "Pantallas", scr_aps: "Adm. por pantalla",
+      dim_dep: "Departamentos", dim_mun: "Ciudades",
       scr_note: "Las pantallas provienen del registro actual de salas: no hay datos históricos.",
       scr_missing: "Con admisiones pero sin salas activas registradas: {m}.",
       sel_dep: "Ciudades de {n}", clear_dep: "Quitar selección",
       no_cinemas: "Sin salas registradas", share_nat: "del total nacional",
-      screens_word: "pantallas", seats_word: "sillas", complexes_word: "complejos", per_screen: "por pantalla",
+      screens_word: "pantallas", seats_word: "sillas", complexes_word: "complejos",
       map_credit: "Límites departamentales: DANE, vía el mapa público de John Guerra.",
       n_features: "Las cuotas comparan solo largometrajes: las admisiones de los cortometrajes dependen de las películas que acompañan.",
       n_origin: "El origen de cada película es su país de mayor participación en la producción.",
@@ -122,15 +121,14 @@
       s_regions_hint: "Admissions to all films by department, and registered cinema screens. This section only responds to the period filter.",
       map_a: "Admissions by department", map_r: "Box-office revenue by department (COP)",
       map_hint: "Whole market · {y} · click a department to see its cities",
-      scr_title_s: "Active cinema screens", scr_title_aps: "Admissions per screen",
+      scr_title_s: "Active cinema screens",
       scr_hint_s: "Current cinema registry ({d}) · top 15",
-      scr_hint_aps: "{y} admissions divided by today's active screens · top 15",
-      dim_dep: "Departments", dim_mun: "Cities", scr_s: "Screens", scr_aps: "Adm. per screen",
+      dim_dep: "Departments", dim_mun: "Cities",
       scr_note: "Screens come from the current cinema registry: there is no historical data.",
       scr_missing: "With admissions but no active registered cinemas: {m}.",
       sel_dep: "Cities in {n}", clear_dep: "Clear selection",
       no_cinemas: "No registered cinemas", share_nat: "of the national total",
-      screens_word: "screens", seats_word: "seats", complexes_word: "venues", per_screen: "per screen",
+      screens_word: "screens", seats_word: "seats", complexes_word: "venues",
       map_credit: "Department boundaries: DANE, via John Guerra's public map.",
       n_films: "{a} features · {b} shorts", n_adm: "Features: {a} · Shorts: {b}",
       n_feat: "{p} of releases · {a} admissions", n_short: "{p} of releases · {a} admissions",
@@ -193,7 +191,7 @@
     open: new Set(),
     gran: "year", topN: 10,
     mkMetric: "a", mkGran: "month", share: "a",
-    mapMetric: "a", scrDim: "dep", scrMetric: "s", dep: "",
+    mapMetric: "a", scrDim: "dep", dep: "",
     sort: { key: "d", dir: -1 }, shown: 25,
     // Shorts' admissions dwarf features', so this chart opens on features only.
     hiddenAdm: new Set(["Cortometraje"]),
@@ -343,7 +341,6 @@
     pressed("#shareSeg button", "share", S.share);
     pressed("#mapMetricSeg button", "mapm", S.mapMetric);
     pressed("#scrDimSeg button", "dim", S.dep ? "mun" : S.scrDim);
-    pressed("#scrMetricSeg button", "scrm", S.scrMetric);
     $("#genre").value = S.genre; $("#prod").value = S.prod; $("#topic").value = S.topic;
   }
 
@@ -751,7 +748,8 @@
   }
 
   // ---------- regions (whole market; period filter only) ----------
-  const cityLabel = (name) => (norm(name).startsWith("bogota") ? "Bogotá D.C." : titleCase(name));
+  const cityLabel = (name) => (norm(name).startsWith("bogota") ? "Bogotá D.C."
+    : titleCase(name).replace(/ (De|Del|La|Las|Los|El|Y) /g, (m) => m.toLowerCase()));
   // Screens are a current snapshot, so per-screen figures use the latest complete year of admissions.
   const latestYear = () => {
     const ys = [...new Set(REGIONS.dep.map((d) => d[0]))].sort();
@@ -814,7 +812,9 @@
         itemGap: 4, textStyle: { color: css("--ink-2"), fontSize: 11 }, hoverLink: false,
       } : undefined,
       series: [{
-        type: "map", map: "colombia", roam: false, selectedMode: false, left: "center", top: 8, bottom: 8,
+        // aspectScale 1: ECharts' default 0.75 squashes longitude, which distorts a country on the equator.
+        type: "map", map: "colombia", roam: false, selectedMode: false, aspectScale: 1,
+        layoutCenter: ["55%", "50%"], layoutSize: "96%",
         itemStyle: { areaColor: css("--nodata"), borderColor: css("--surface"), borderWidth: 0.8 },
         emphasis: { label: { show: false }, itemStyle: { areaColor: css("--wash-strong"), borderColor: css("--ink"), borderWidth: 1.2 } },
         data: Object.entries(DEP_NAMES).map(([code, name]) => ({
@@ -833,26 +833,21 @@
   }
 
   function renderScreens() {
-    const m = S.scrMetric;
     const dim = S.dep ? "mun" : S.scrDim;  // a selected department always lists its cities
-    const year = latestYear();
-    const depAdm = {}, munAdm = {};
-    for (const d of REGIONS.dep) if (d[0] === year) depAdm[d[1]] = d[2];
-    for (const d of REGIONS.mun) if (d[0] === year) munAdm[`${d[1]}|${norm(d[2])}`] = d[3];
     let items = dim === "dep"
-      ? Object.entries(REGIONS.screens).map(([code, v]) => ({ code, label: DEP_NAMES[code] || code, s: v.s, adm: depAdm[code] }))
+      ? Object.entries(REGIONS.screens).map(([code, v]) => ({ code, label: DEP_NAMES[code] || code, s: v.s }))
       : REGIONS.mun_screens.filter((x) => !S.dep || x[0] === S.dep)
-        .map(([code, name, s]) => ({ code, label: cityLabel(name), s, adm: munAdm[`${code}|${norm(name)}`] }));
-    const val = (it) => (m === "s" ? it.s : it.adm && it.s ? it.adm / it.s : null);
-    items = items.filter((it) => val(it) != null).sort((x, y) => val(y) - val(x)).slice(0, 15);
+        .map(([code, name, s]) => ({ code, label: cityLabel(name), s }));
+    items = items.sort((x, y) => y.s - x.s).slice(0, 15);
 
-    $("#scrTitle").textContent = t("scr_title_" + m);
-    $("#scrHint").textContent = m === "s"
-      ? t("scr_hint_s", { d: REGIONS.meta.cinemas_extracted ? dateFmt(REGIONS.meta.cinemas_extracted) : "" })
-      : t("scr_hint_aps", { y: year });
+    $("#scrTitle").textContent = t("scr_title_s");
+    $("#scrHint").textContent = t("scr_hint_s", { d: REGIONS.meta.cinemas_extracted ? dateFmt(REGIONS.meta.cinemas_extracted) : "" });
     $("#depPill").hidden = !S.dep;
     if (S.dep) $("#depPillText").textContent = t("sel_dep", { n: DEP_NAMES[S.dep] || S.dep });
-    const missing = Object.keys(depAdm).filter((code) => !REGIONS.screens[code]).map((code) => DEP_NAMES[code] || code);
+    // Departments that sold tickets in the latest complete year but have no active cinema in the registry.
+    const year = latestYear();
+    const withAdm = new Set(REGIONS.dep.filter((d) => d[0] === year && d[2] > 0).map((d) => d[1]));
+    const missing = [...withAdm].filter((code) => !REGIONS.screens[code]).map((code) => DEP_NAMES[code] || code).sort();
     $("#scrNote").textContent = t("scr_note") + (missing.length ? " " + t("scr_missing", { m: missing.join(", ") }) : "");
 
     const el = $("#chScreens");
@@ -865,13 +860,12 @@
       tooltip: { ...base().tooltip, trigger: "item", formatter: (p) => {
         const it = items[p.dataIndex];
         return `<div style="font-weight:600;margin-bottom:2px">${esc(it.label)}</div>`
-          + `<div><b>${fmt(it.s)}</b> <span style="color:${css("--ink-2")}">${t("screens_word")}</span></div>`
-          + (it.adm ? `<div style="color:${css("--ink-2")}">${fmt(it.adm)} ${t("adm_word")} (${year}) · ${fmt(it.adm / it.s)} ${t("per_screen")}</div>` : "");
+          + `<div><b>${fmt(it.s)}</b> <span style="color:${css("--ink-2")}">${t("screens_word")}</span></div>`;
       } },
       xAxis: valueAxis({ show: false }),
       yAxis: catAxis(items.map((it) => it.label), { inverse: true, axisLine: { show: false }, axisLabel: { color: css("--ink-2"), fontSize: 12 } }),
       series: [{
-        type: "bar", barMaxWidth: 16, data: items.map((it) => val(it)),
+        type: "bar", barMaxWidth: 16, data: items.map((it) => it.s),
         itemStyle: { color, borderRadius: [0, 4, 4, 0] }, emphasis: { itemStyle: { opacity: 0.85 } },
         label: { show: true, position: "right", color: css("--ink"), fontSize: 11, formatter: (p) => fmtC(p.value) },
       }],
@@ -879,7 +873,7 @@
     }, true);
     c.off("click");
     if (dim === "dep") c.on("click", (p) => { S.dep = items[p.dataIndex].code; renderControls(); renderRegions(); });
-    el.setAttribute("aria-label", t("scr_title_" + m));
+    el.setAttribute("aria-label", t("scr_title_s"));
   }
 
   function sortRows(rows) {
@@ -989,7 +983,6 @@
       S.scrDim = b.dataset.dim; if (S.scrDim === "dep") S.dep = "";
       renderControls(); renderRegions();
     }));
-    $$("#scrMetricSeg button").forEach((b) => b.addEventListener("click", () => { S.scrMetric = b.dataset.scrm; renderControls(); renderScreens(); }));
     $("#depClear").addEventListener("click", () => { S.dep = ""; renderControls(); renderRegions(); });
     // The shorts section starts closed; draw its chart once it has a size.
     $("#shortsSection").addEventListener("toggle", () => { if ($("#shortsSection").open) renderType(); });

@@ -43,7 +43,8 @@
     --us: #9085e9;
     --ot: #4a4945;
     --mk: #a3a29a;
-    --seq1: #184f95; --seq2: #256abf; --seq3: #3987e5; --seq4: #6da7ec; --seq5: #9ec5f4; --seq6: #cde2fb;
+    /* Same direction as light mode (darker = more); the darkest step still clears 2:1 on the dark surface. */
+    --seq1: #b7d3f6; --seq2: #86b6ef; --seq3: #5598e7; --seq4: #2a78d6; --seq5: #1c5cab; --seq6: #184f95;
     --nodata: #2c2c2a;
     --wash-strong: rgba(255, 255, 255, 0.18);
   }
@@ -66,7 +67,7 @@
   --us: #9085e9;
   --ot: #4a4945;
   --mk: #a3a29a;
-  --seq1: #184f95; --seq2: #256abf; --seq3: #3987e5; --seq4: #6da7ec; --seq5: #9ec5f4; --seq6: #cde2fb;
+  --seq1: #b7d3f6; --seq2: #86b6ef; --seq3: #5598e7; --seq4: #2a78d6; --seq5: #1c5cab; --seq6: #184f95;
   --nodata: #2c2c2a;
   --wash-strong: rgba(255, 255, 255, 0.18);
 }
