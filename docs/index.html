@@ -231,6 +231,52 @@
       </article>
     </section>
 
+    <section class="section-head" id="regionsHead" hidden>
+      <h2 data-i18n="s_regions">El cine en las regiones</h2>
+      <p data-i18n="s_regions_hint">Admisiones de todas las películas por departamento y pantallas de cine registradas. Esta sección solo responde al filtro de periodo.</p>
+    </section>
+
+    <section class="grid" id="regionsGrid" hidden>
+      <article class="card span2">
+        <header class="card-head">
+          <div>
+            <h2 id="mapTitle"></h2>
+            <p class="hint" id="mapHint"></p>
+          </div>
+          <div class="seg small" id="mapMetricSeg">
+            <button type="button" data-mapm="a" data-i18n="m_adm">Admisiones</button>
+            <button type="button" data-mapm="r" data-i18n="m_rev">Ingresos</button>
+          </div>
+        </header>
+        <div class="chart map" id="chMap" role="img"></div>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <div>
+            <h2 id="scrTitle"></h2>
+            <p class="hint" id="scrHint"></p>
+          </div>
+          <div class="controls">
+            <div class="seg small" id="scrDimSeg">
+              <button type="button" data-dim="dep" data-i18n="dim_dep">Departamentos</button>
+              <button type="button" data-dim="mun" data-i18n="dim_mun">Ciudades</button>
+            </div>
+            <div class="seg small" id="scrMetricSeg">
+              <button type="button" data-scrm="s" data-i18n="scr_s">Pantallas</button>
+              <button type="button" data-scrm="aps" data-i18n="scr_aps">Adm. por pantalla</button>
+            </div>
+          </div>
+        </header>
+        <p class="dep-pill" id="depPill" hidden>
+          <span id="depPillText"></span>
+          <button type="button" id="depClear" data-i18n="clear_dep">Quitar selección</button>
+        </p>
+        <div class="chart" id="chScreens" role="img"></div>
+        <p class="footnote" id="scrNote"></p>
+      </article>
+    </section>
+
     <section class="grid">
       <article class="card span3">
         <header class="card-head">
@@ -271,6 +317,7 @@
 
   <footer class="foot">
     <p><span data-i18n="source">Fuente</span>: <a href="https://mcultura-my.sharepoint.com/:f:/g/personal/sirec_mincultura_gov_co/EvK4Z0jd1G1Mvgu94k1L5YsB4IpRICiX41MTdYZtm8Pk8Q" target="_blank" rel="noopener">SIREC – Ministerio de las Culturas, las Artes y los Saberes</a> · <span data-i18n="refresh">Actualización automática cada jueves</span> · <span id="generated"></span></p>
+    <p data-i18n="map_credit">Límites departamentales: DANE, vía el mapa público de John Guerra.</p>
     <p class="credit" data-i18n="author">Dashboard creado por Simón Moreno Salinas</p>
   </footer>
 

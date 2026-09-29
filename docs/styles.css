@@ -16,6 +16,10 @@
   --us: #4a3aa7; /* US films */
   --ot: #c3c2b7; /* other countries: neutral, it is context */
   --mk: #6b6a64; /* whole market series */
+  /* Map: one blue ramp, light -> dark = less -> more (ordinal; lightest step still clears 2:1). */
+  --seq1: #86b6ef; --seq2: #5598e7; --seq3: #2a78d6; --seq4: #1c5cab; --seq5: #104281; --seq6: #0d366b;
+  --nodata: #e7e6e1;
+  --wash-strong: rgba(11, 11, 11, 0.14);
   --on-accent: #ffffff;
   --radius: 12px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -39,6 +43,9 @@
     --us: #9085e9;
     --ot: #4a4945;
     --mk: #a3a29a;
+    --seq1: #184f95; --seq2: #256abf; --seq3: #3987e5; --seq4: #6da7ec; --seq5: #9ec5f4; --seq6: #cde2fb;
+    --nodata: #2c2c2a;
+    --wash-strong: rgba(255, 255, 255, 0.18);
   }
 }
 :root[data-theme="dark"] {
@@ -59,6 +66,9 @@
   --us: #9085e9;
   --ot: #4a4945;
   --mk: #a3a29a;
+  --seq1: #184f95; --seq2: #256abf; --seq3: #3987e5; --seq4: #6da7ec; --seq5: #9ec5f4; --seq6: #cde2fb;
+  --nodata: #2c2c2a;
+  --wash-strong: rgba(255, 255, 255, 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -177,7 +187,15 @@ main { max-width: 1440px; margin: 0 auto; padding: 16px 24px 8px; }
 .section-head { margin: 28px 0 10px; }
 .section-head h2 { font-size: 18px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
 .section-head p { margin: 2px 0 0; color: var(--ink-2); font-size: 13px; }
-#marketGrid { margin-bottom: 12px; }
+#marketGrid, #regionsGrid { margin-bottom: 12px; }
+.chart.map { height: 520px; }
+.dep-pill { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 13px; font-weight: 500; }
+.dep-pill button {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 10px;
+  font-size: 12px; color: var(--ink-2); cursor: pointer;
+}
+.dep-pill button:hover { background: var(--wash); }
+.foot p { margin: 0 0 4px; }
 .card.note h2 { margin-bottom: 8px; }
 .card.note p { margin: 0 0 8px; color: var(--ink-2); line-height: 1.5; font-size: 13px; }
 .card.note .stat { color: var(--ink); font-weight: 500; font-size: 14px; }
@@ -265,4 +283,5 @@ tr.detail .meta { margin: 0; font-size: 12px; color: var(--muted); }
   .kpi .value { font-size: 24px; }
   .kpi.hero .value { font-size: 40px; }
   .chart.tall { height: 380px; }
+  .chart.map { height: 420px; }
 }

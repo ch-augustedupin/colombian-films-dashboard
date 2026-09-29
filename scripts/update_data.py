@@ -19,6 +19,7 @@ import io
 import json
 import re
 import sys
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -77,8 +78,31 @@ ALL_RELEASES = {
     "detail_sheet": "Detalle Largometrajes",
 }
 
+# Regional sources: yearly admissions per municipality (whole market) and the current cinema registry.
+MUNICIPAL = {
+    "path": f"{DOCS}/INFORMACIÓN - DATOS HISTÓRICOS/HISTORICO Exhibicion_Por_Municipio.xlsx",
+    "id": "e53793b9-b144-483f-8d6e-932a163fa711",
+    "sheet": "Total_asistencia 2007-2026",
+}
+CINEMAS = {
+    "path": f"{DOCS}/AGENTES E INFRAESTRUCTURA/Salas de Cine Registradas y Activas.xlsx",
+    "id": "a9edffdd-ff79-475e-9420-e123393e36bf",
+    "sheet": "Base Datos",
+}
+# SIREC department names (accents and punctuation stripped) -> DANE department code.
+DANE = {
+    "ANTIOQUIA": "05", "ATLANTICO": "08", "BOGOTA D C": "11", "BOGOTA": "11", "BOLIVAR": "13", "BOYACA": "15",
+    "CALDAS": "17", "CAQUETA": "18", "CAUCA": "19", "CESAR": "20", "CORDOBA": "23", "CUNDINAMARCA": "25",
+    "CHOCO": "27", "HUILA": "41", "LA GUAJIRA": "44", "MAGDALENA": "47", "META": "50", "NARINO": "52",
+    "NORTE DE SANTANDER": "54", "QUINDIO": "63", "RISARALDA": "66", "SANTANDER": "68", "SUCRE": "70",
+    "TOLIMA": "73", "VALLE DEL CAUCA": "76", "ARAUCA": "81", "CASANARE": "85", "PUTUMAYO": "86",
+    "SAN ANDRES": "88", "SAN ANDRES Y PROVIDENCIA": "88", "AMAZONAS": "91", "GUAINIA": "94", "GUAVIARE": "95",
+    "VAUPES": "97", "VICHADA": "99",
+}
+
 OUT = Path(__file__).resolve().parent.parent / "docs" / "data" / "films.json"
 MARKET_OUT = OUT.with_name("market.json")
+REGIONS_OUT = OUT.with_name("regions.json")
 UA = {"User-Agent": "Mozilla/5.0 (colombian-films-dashboard updater)"}
 
 
@@ -270,6 +294,94 @@ def write_market(s: requests.Session) -> None:
           f"{len(rel['screens'])} screen years.")
 
 
+def place_key(s: object) -> str:
+    """Accent/punctuation-insensitive key, so both files' spellings of a place match."""
+    t = unicodedata.normalize("NFD", text(s).upper())
+    t = "".join(ch for ch in t if unicodedata.category(ch) != "Mn")
+    return re.sub(r"[^A-Z]+", " ", t).strip()
+
+
+def city_name(s: object) -> str:
+    return "BOGOTÁ D.C." if place_key(s) in ("BOGOTA D C", "BOGOTA") else text(s).upper()
+
+
+def dane_code(dep: object, unknown: set[str]) -> str | None:
+    code = DANE.get(place_key(dep))
+    if code is None:
+        unknown.add(text(dep))
+    return code
+
+
+def parse_municipal(xlsx: bytes, unknown: set[str]) -> tuple[list, list, str | None]:
+    df = pd.read_excel(io.BytesIO(xlsx), sheet_name=MUNICIPAL["sheet"], header=0)
+    df.columns = [norm(c) for c in df.columns]
+    need = ["AÑO", "Municipio", "Departamento", "Asistencia", "Taquilla_Millones"]
+    if any(c not in df.columns for c in need):
+        raise RuntimeError(f"Unexpected columns in '{MUNICIPAL['sheet']}': {list(df.columns)}")
+    df = df.dropna(subset=["AÑO", "Departamento"])
+    df["code"] = [dane_code(d, unknown) for d in df["Departamento"]]
+    df = df.dropna(subset=["code"])
+    df["mkey"] = df["Municipio"].map(place_key)
+    if len(df) < 1000:
+        raise RuntimeError(f"Only {len(df)} municipal rows parsed")
+    # A municipality can appear on several rows per year (one per venue/exhibitor): add them up.
+    dep = df.groupby(["AÑO", "code"])[["Asistencia", "Taquilla_Millones"]].sum().reset_index()
+    names = df.groupby(["code", "mkey"])["Municipio"].first()
+    mun = df.groupby(["AÑO", "code", "mkey"])["Asistencia"].sum().reset_index()
+    return (
+        [[int(r.AÑO), r.code, int(r.Asistencia), round(float(r.Taquilla_Millones), 3)] for r in dep.itertuples()],
+        [[int(r.AÑO), r.code, city_name(names[(r.code, r.mkey)]), int(r.Asistencia)] for r in mun.itertuples()],
+        extraction_date(list(df.columns)),
+    )
+
+
+def parse_cinemas(xlsx: bytes, unknown: set[str]) -> tuple[dict, list, str | None]:
+    df = pd.read_excel(io.BytesIO(xlsx), sheet_name=CINEMAS["sheet"], header=1)
+    headers = [norm(c) for c in df.columns]
+    df = df.iloc[:, :9]
+    df.columns = ["exhibitor", "brand", "complex", "dep", "mun", "address", "screens", "seats", "status"]
+    active = df[df["status"].astype(str).str.strip().str.lower() == "activo"].copy()
+    if active.empty or active["screens"].sum() < 500:
+        raise RuntimeError(f"Cinema registry looks wrong ({len(active)} active complexes)")
+    active["code"] = [dane_code(d, unknown) for d in active["dep"]]
+    active = active.dropna(subset=["code"])
+    by_dep = {
+        code: {"s": int(g["screens"].sum()), "seats": int(g["seats"].fillna(0).sum()), "c": int(len(g))}
+        for code, g in active.groupby("code")
+    }
+    active["mkey"] = active["mun"].map(place_key)
+    by_mun = [
+        [code, city_name(g["mun"].iloc[0]), int(g["screens"].sum())]
+        for (code, _), g in active.groupby(["code", "mkey"])
+    ]
+    return by_dep, by_mun, extraction_date(headers)
+
+
+def write_regions(s: requests.Session) -> None:
+    """Regional data is optional: on any failure keep the previous regions.json."""
+    unknown: set[str] = set()
+    try:
+        dep, mun, mun_date = parse_municipal(fetch(s, MUNICIPAL)[0], unknown)
+        screens, mun_screens, cin_date = parse_cinemas(fetch(s, CINEMAS)[0], unknown)
+    except Exception as e:  # noqa: BLE001
+        print(f"::warning::Regional data unavailable, keeping previous regions.json: {e}")
+        return
+    if unknown:
+        print(f"::warning::Departments without a DANE code (left out of the map): {sorted(unknown)}")
+    body = {"dep": dep, "mun": mun, "screens": screens, "mun_screens": mun_screens}
+    digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+    if REGIONS_OUT.exists() and json.loads(REGIONS_OUT.read_text(encoding="utf-8")).get("meta", {}).get("sha256") == digest:
+        print("Regional data unchanged.")
+        return
+    payload = {"meta": {
+        "municipal_extracted": mun_date, "cinemas_extracted": cin_date,
+        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "sha256": digest,
+    }, **body}
+    REGIONS_OUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"Wrote regional data: {len(dep)} department-years, {len(mun)} city-years, "
+          f"{sum(v['s'] for v in screens.values())} active screens.")
+
+
 def previous_details() -> dict[int, dict]:
     if not OUT.exists():
         return {}
@@ -300,6 +412,7 @@ def main() -> int:
     matched = sum(1 for f in films if f["id"] in details)
     print(f"Director/synopsis matched for {matched}/{len(films)} films.")
     write_market(s)
+    write_regions(s)
 
     digest = hashlib.sha256(json.dumps(films, ensure_ascii=False).encode()).hexdigest()
     if OUT.exists():

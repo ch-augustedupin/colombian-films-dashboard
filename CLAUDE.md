@@ -46,6 +46,20 @@ python -m http.server 8765 --directory docs   # preview (also in .claude/launch.
   appear as a share. Shares exclude shorts (they would inflate Colombia to 30–40%; features-only is ~1.6–2%).
 - Market failures are non-fatal (previous market.json kept). The market section only follows the period filter.
 
+## Regional data (v4, `docs/data/regions.json`, written by `update_data.py`)
+- `HISTORICO Exhibicion_Por_Municipio.xlsx` → `Total_asistencia 2007-2026` (header row 1): yearly admissions + revenue
+  per municipality, whole market. A (year, municipality) appears on several rows → summed.
+- `AGENTES E INFRAESTRUCTURA/Salas de Cine Registradas y Activas.xlsx` → `Base Datos` (header row 2): cinema registry,
+  current snapshot only (no history). Only `Activo` complexes count (~1,116 screens). Chocó, Quindío and Risaralda have
+  admissions but no active registered cinemas — the dashboard says so instead of showing zero.
+- Department names → DANE codes via the `DANE` table (keys from `place_key()`, accents/punctuation stripped). Unmapped
+  names log a warning. `regions.json`: `dep` [year, code, adm, rev_M], `mun` [year, code, CITY, adm], `screens`
+  {code: {s, seats, c}}, `mun_screens` [code, CITY, screens].
+- Map outlines: `docs/data/colombia-departments.geo.json` (33 departments, `code` + `name`, ~70 KB), built once by
+  `scripts/build_geo.py` (needs shapely, not in requirements.txt) from John Guerra's DANE-derived gist. Credited in footer.
+- Map colours: 6 quantile-based pieces on the `--seq1..6` blue ramp (Bogotá is ~30% of admissions); no data = `--nodata`.
+  Admissions-per-screen uses the latest complete year, because screens are a current snapshot.
+
 ## Design decisions
 - v3: the dashboard opens on feature films (`S.type = "Largometraje"`); shorts via the Duración filter and a closed
   "Largometrajes y cortometrajes" section at the bottom. No rating filter. Period = date inputs + "Todo"/"Este año".
