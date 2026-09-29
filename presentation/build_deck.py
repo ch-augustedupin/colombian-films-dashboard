@@ -46,7 +46,7 @@ async (o) => {
 # name, dashboard state, element to capture
 SHOTS_PLAN = [
     ("kpis", {**YTD, "type": "Largometraje"}, ".kpis"),
-    ("releases", {**YTD, "type": "", "gran": "month"}, "#chTime"),
+    ("releases", {**YTD, "type": "Largometraje", "gran": "month"}, "#chTime"),
     ("genres", {**YTD, "type": "Largometraje"}, "#chGenre"),
     ("top", {**YTD, "type": "Largometraje"}, "#chTop"),
     ("topics", {**YTD, "type": "Largometraje"}, "#chTopics"),
@@ -75,8 +75,9 @@ SLIDES = [
      "Headline indicators for 2026 to date, feature films view", "kpis",
      "117 Colombian releases vs. 118 in the same period of 2025. Admissions are cumulative to date, so recent films are still adding viewers."),
     ("Release calendar",
-     "May was the busiest month, with 18 Colombian premieres",
-     "Colombian releases per month in 2026, feature films and shorts", "releases", ""),
+     "May was the busiest month for Colombian features, and March–May brought more than half of the year’s 60",
+     "Colombian feature film premieres per month in 2026", "releases",
+     "12 premieres in May, 11 in March and 9 in April: 32 of the 60 Colombian features released so far in 2026."),
     ("Genres",
      "Documentaries now outnumber fiction among Colombian feature releases",
      "Colombian feature films released in 2026, by genre", "genres",
