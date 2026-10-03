@@ -14,7 +14,7 @@ MinCulturas' public SIREC file "HISTORICO Estrenos Colombia.xlsx". Owner: GitHub
   changed synopses are sent. `--estimate` (free), `--limit N --dry-run`, `--batch` (Message Batches API, one-time backfill).
   Refuses to run while taxonomy `status` contains "draft". In CI it needs the `ANTHROPIC_API_KEY` repo secret; the step is
   `continue-on-error` so tagging never blocks the data refresh.
-- `.github/workflows/update-and-deploy.yml` — Thursdays 17:00 UTC (12:00 Bogotá) refresh + commit + Pages deploy; also on manual dispatch and push to `main`
+- `.github/workflows/update-and-deploy.yml` — Fridays + Saturdays 17:00 UTC (12:00 Bogotá) refresh + commit + Pages deploy; also on manual dispatch and push to `main`
 - `docs/` — static site: `index.html`, `styles.css`, `app.js` (vanilla JS + ECharts 5 from jsDelivr, no build step)
 
 ## Commands
@@ -85,7 +85,8 @@ python -m http.server 8765 --directory docs   # preview (also in .claude/launch.
   subagents via `tag_topics.py --export` → tag → `--import`. No `ANTHROPIC_API_KEY` secret exists, so the Actions tagging
   step just logs a warning and skips.
 - New films are tagged by the cloud routine "Weekly topic tagging – Colombian films dashboard"
-  (https://claude.ai/code/routines/trig_014vxfFyyL4Yv7vXa3BDJSzf): Thursdays 19:00 UTC, two hours after the data refresh,
+  (https://claude.ai/code/routines/trig_014vxfFyyL4Yv7vXa3BDJSzf): Sundays 17:00 UTC, after the Friday/Saturday refreshes
+  (GitHub started the Oct 1 scheduled run 4.5 h late, so a 2-hour gap was not enough),
   model claude-sonnet-5, tools Bash/Read/Write. It exports pending films, tags them itself, imports, and pushes only
   `docs/data/topics.json` to main (which triggers the Pages deploy). Debug with RemoteTrigger `list_runs` / `get_run_log`.
   Not yet proven: that a routine can push directly to main (the first real run with new films will show it).
@@ -93,4 +94,4 @@ python -m http.server 8765 --directory docs   # preview (also in .claude/launch.
 ## Git
 - Local identity is repo-scoped: `ch-augustedupin <ch-augustedupin@users.noreply.github.com>` (keeps the personal email out of the public repo).
 - The Actions bot commits weekly `data: weekly refresh …` — `git pull` before editing.
-- Open item: the source file was last updated on a Friday; if Thursday runs keep missing new data, move the cron to Friday.
+- SIREC updates its files on Fridays (seen Sep 25; nothing new by Thu Oct 1), hence the Friday/Saturday schedule.

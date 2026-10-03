@@ -155,7 +155,7 @@ def slides_html() -> str:
 <section class="slide closing">
   <header><p class="kicker">About this overview</p><h2>One live dashboard, updated automatically every week</h2></header>
   <ul>
-    <li>All figures come from six public SIREC files published by Colombia’s Ministry of Culture, refreshed by an automated pipeline every Thursday.</li>
+    <li>All figures come from six public SIREC files published by Colombia’s Ministry of Culture, refreshed by an automated pipeline every week.</li>
     <li>“Colombian films” are titles whose main producing country is Colombia. Shares compare feature films only, because short films’ admissions depend on the features they accompany.</li>
     <li>Admissions per film are cumulative to date: films released recently are still adding viewers.</li>
     <li>Market, revenue and regional figures cover all films shown in Colombia; SIREC does not publish revenue per film.</li>

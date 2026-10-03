@@ -2,8 +2,9 @@ name: Update data and deploy dashboard
 
 on:
   schedule:
-    # Every Thursday at 17:00 UTC (12:00 Bogotá).
-    - cron: "0 17 * * 4"
+    # Fridays and Saturdays at 17:00 UTC (12:00 Bogotá). SIREC publishes on Fridays; Saturday catches late uploads.
+    # GitHub can start scheduled runs hours late, so the topic routine runs on Sunday.
+    - cron: "0 17 * * 5,6"
   workflow_dispatch:
     inputs:
       backfill:
