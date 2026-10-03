@@ -62,6 +62,20 @@ python -m http.server 8765 --directory docs   # preview (also in .claude/launch.
 - Screens chart shows only screen counts (departments / top-15 cities). The user found "admissions per screen"
   confusing and asked to remove it — don't reintroduce it.
 
+## Upcoming releases (v5, `docs/data/upcoming.json`, written by `update_data.py` → `write_upcoming()`)
+- Source: the Proimágenes homepage (`https://www.proimagenescolombia.com/?lang=es`), static HTML, robots.txt allows all.
+  Each film is an `<article class="itemSMovie">`: link `pelicula_plantilla.php?id_pelicula=N`, poster img, title in
+  `h3.gHidden`, date in `<strong>` ("octubre 08 / 2026"). ~20 recent + ~6 upcoming (future-dated) films.
+- Upcoming films get details from their film page: director (`<h3>Director:</h3>` → `<h4>`), "Género / Subgénero",
+  "Duración", "Distribución Theatrical Lanzamiento" (company name only — never store the address/email), "Sinopsis",
+  YouTube embed → trailer, "Fecha Estreno" (authoritative date). One request per second.
+- The site mixes UTF-8 and Latin-1 bytes in the same page: decode each extracted fragment with `web_text()`.
+- The Pantalla Colombia newsletter was considered but only lists films already released (no future dates).
+- `upcoming.json`: `upcoming [{pid,t,d,url,poster,dir,g,m,dist,syn,trailer}]`, `recent [{pid,t,d,url}]`. Non-fatal.
+- Dashboard: "Próximos estrenos colombianos" section above the film table (list with hot-linked posters + weekly bars),
+  ignores filters, hides past dates client-side. Recent/upcoming titles matched to SIREC films (normalised title,
+  ≤21 days apart) add a "Ver en Proimágenes" link in the table's detail row.
+
 ## Design decisions
 - v3: the dashboard opens on feature films (`S.type = "Largometraje"`); shorts via the Duración filter and a closed
   "Largometrajes y cortometrajes" section at the bottom. No rating filter. Period = date inputs + "Todo"/"Este año".

@@ -15,10 +15,12 @@ base file. A failure in the titles file only reuses the previous director/synops
 from __future__ import annotations
 
 import hashlib
+import html
 import io
 import json
 import re
 import sys
+import time
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
@@ -100,9 +102,18 @@ DANE = {
     "VAUPES": "97", "VICHADA": "99",
 }
 
+# Upcoming Colombian releases: the "Próximos estrenos" carousel on Proimágenes' homepage (static HTML).
+PROIMAGENES = "https://www.proimagenescolombia.com"
+PROIMAGENES_HOME = f"{PROIMAGENES}/?lang=es"
+FILM_PAGE = "/secciones/cine_colombiano/peliculas_colombianas/pelicula_plantilla.php?id_pelicula={}"
+MESES = {m: i for i, m in enumerate(
+    ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+     "septiembre", "octubre", "noviembre", "diciembre"], start=1)}
+
 OUT = Path(__file__).resolve().parent.parent / "docs" / "data" / "films.json"
 MARKET_OUT = OUT.with_name("market.json")
 REGIONS_OUT = OUT.with_name("regions.json")
+UPCOMING_OUT = OUT.with_name("upcoming.json")
 UA = {"User-Agent": "Mozilla/5.0 (colombian-films-dashboard updater)"}
 
 
@@ -382,6 +393,104 @@ def write_regions(s: requests.Session) -> None:
           f"{sum(v['s'] for v in screens.values())} active screens.")
 
 
+def web_text(raw: bytes) -> str:
+    """Decode one HTML fragment from Proimágenes. The site mixes UTF-8 and Latin-1 bytes within the same page,
+    so decode each extracted field on its own, then drop tags and entities."""
+    try:
+        s = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        s = raw.decode("latin-1")
+    s = re.sub(r"<br\s*/?>", ", ", s)
+    s = re.sub(r"<[^>]+>", " ", s)
+    s = html.unescape(s)
+    s = re.sub("[؀-ۿ​-‏]", "", s)  # stray marks copy-pasted into some synopses
+    s = re.sub(r"\s+", " ", s)
+    return re.sub(r"\s*,(\s*,)+", ",", s).strip(" ,")
+
+
+def spanish_date(s: str) -> str | None:
+    """'octubre 08 / 2026' or 'Octubre 08 de 2026' -> '2026-10-08'."""
+    m = re.search(r"([a-záéíóú]+)\s+(\d{1,2})\s*(?:/|de)\s*(\d{4})", s.lower())
+    if not m or m[1] not in MESES:
+        return None
+    return f"{m[3]}-{MESES[m[1]]:02d}-{int(m[2]):02d}"
+
+
+def first(pattern: bytes, raw: bytes) -> str:
+    m = re.search(pattern, raw, re.S)
+    return web_text(m[1]) if m else ""
+
+
+def film_details(s: requests.Session, pid: str) -> dict:
+    raw = s.get(PROIMAGENES + FILM_PAGE.format(pid), timeout=60).content
+    directors = re.search(rb"<h3>Director:</h3>(.*?)</li>", raw, re.S)
+    minutes = first(rb"Duraci\S*?:</h3>\s*<p>(.*?)</p>", raw)
+    trailer = re.search(rb"youtube\.com/embed/([\w-]{6,})", raw)
+    return {
+        "dir": ", ".join(web_text(n) for n in re.findall(rb"<h4>(.*?)</h4>", directors[1])) if directors else "",
+        "g": first(rb"nero / Subg\S*?nero:</h3>\s*<p>(.*?)</p>", raw),
+        "m": int(re.search(r"\d+", minutes)[0]) if re.search(r"\d+", minutes) else None,
+        # Company name only: the block also carries the distributor's address and email.
+        "dist": first(rb"Distribuci\S*? Theatrical Lanzamiento:</strong>\s*<br>\s*([^<]+)", raw),
+        "syn": first(rb"<h3>Sinopsis</h3>\s*(<p>.*?)</div>", raw),
+        "trailer": f"https://www.youtube.com/watch?v={trailer[1].decode()}" if trailer else "",
+        "d_page": spanish_date(first(rb"Fecha Estreno:</strong>([^<]+)", raw)),
+    }
+
+
+def parse_proimagenes(s: requests.Session) -> dict:
+    raw = s.get(PROIMAGENES_HOME, timeout=60).content
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    upcoming, recent, seen = [], [], set()
+    for block in raw.split(b'<article class="itemSMovie">')[1:]:
+        pid = re.search(rb"id_pelicula=(\d+)", block)
+        date = spanish_date(first(rb"<strong>([^<]+)</strong>", block))
+        if not pid or not date or pid[1] in seen:
+            continue
+        seen.add(pid[1])
+        pid = pid[1].decode()
+        poster = re.search(rb'<img src="([^"]+)"', block)
+        film = {"pid": pid, "t": first(rb'<h3 class="gHidden">(.*?)</h3>', block), "d": date,
+                "url": PROIMAGENES + FILM_PAGE.format(pid)}
+        if date > today:
+            film["poster"] = poster[1].decode() if poster else ""
+            upcoming.append(film)
+        else:
+            recent.append(film)
+    if not upcoming and not recent:
+        raise RuntimeError("No films found on the Proimágenes homepage (layout changed?)")
+    for film in upcoming:
+        time.sleep(1)  # be gentle: one request per second
+        try:
+            film.update(film_details(s, film["pid"]))
+        except Exception as e:  # noqa: BLE001 - keep the film with its homepage fields
+            print(f"::warning::Proimágenes film page {film['pid']} failed: {e}")
+        # The film page date is the authoritative one when both exist.
+        film["d"] = film.pop("d_page", None) or film["d"]
+    upcoming.sort(key=lambda f: (f["d"], f["t"]))
+    recent.sort(key=lambda f: f["d"], reverse=True)
+    return {"upcoming": upcoming, "recent": recent}
+
+
+def write_upcoming() -> None:
+    """Upcoming releases are optional: on any failure keep the previous upcoming.json."""
+    s = requests.Session()
+    s.headers.update(UA)
+    try:
+        body = parse_proimagenes(s)
+    except Exception as e:  # noqa: BLE001
+        print(f"::warning::Proimágenes unavailable, keeping previous upcoming.json: {e}")
+        return
+    digest = hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    if UPCOMING_OUT.exists() and json.loads(UPCOMING_OUT.read_text(encoding="utf-8")).get("meta", {}).get("sha256") == digest:
+        print("Upcoming releases unchanged.")
+        return
+    payload = {"meta": {"source": PROIMAGENES_HOME, "fetched": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "sha256": digest}, **body}
+    UPCOMING_OUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"Wrote upcoming releases: {len(body['upcoming'])} upcoming, {len(body['recent'])} recent.")
+
+
 def previous_details() -> dict[int, dict]:
     if not OUT.exists():
         return {}
@@ -413,6 +522,7 @@ def main() -> int:
     print(f"Director/synopsis matched for {matched}/{len(films)} films.")
     write_market(s)
     write_regions(s)
+    write_upcoming()
 
     digest = hashlib.sha256(json.dumps(films, ensure_ascii=False).encode()).hexdigest()
     if OUT.exists():

@@ -48,6 +48,12 @@
       no_cinemas: "Sin salas registradas", share_nat: "del total nacional",
       screens_word: "pantallas", seats_word: "sillas", complexes_word: "complejos",
       map_credit: "Límites departamentales: DANE, vía el mapa público de John Guerra.",
+      s_up: "Próximos estrenos colombianos",
+      s_up_hint: "Fechas anunciadas por Proimágenes Colombia; pueden cambiar. Esta sección no responde a los filtros.",
+      c_up_list: "Estrenos anunciados", up_hint: "{n} películas anunciadas · consultado el {d}",
+      c_up_time: "Estrenos por semana", c_up_time_hint: "Próximas 10 semanas",
+      up_trailer: "Tráiler", up_pro: "Ver en Proimágenes", up_week: "Semana del {d}",
+      up_credit: "Próximos estrenos y afiches: Proimágenes Colombia.",
       n_features: "Las cuotas comparan solo largometrajes: las admisiones de los cortometrajes dependen de las películas que acompañan.",
       n_origin: "El origen de cada película es su país de mayor participación en la producción.",
       n_screens: "Pantallas: suma de las pantallas en que se exhibió cada largometraje durante el año, disponible desde 2020. El reporte de 2023 y 2024 solo incluye películas colombianas, por lo que esos años no tienen cuota.",
@@ -130,6 +136,12 @@
       no_cinemas: "No registered cinemas", share_nat: "of the national total",
       screens_word: "screens", seats_word: "seats", complexes_word: "venues",
       map_credit: "Department boundaries: DANE, via John Guerra's public map.",
+      s_up: "Upcoming Colombian releases",
+      s_up_hint: "Dates announced by Proimágenes Colombia; they may change. This section does not respond to the filters.",
+      c_up_list: "Announced releases", up_hint: "{n} films announced · checked on {d}",
+      c_up_time: "Releases per week", c_up_time_hint: "Next 10 weeks",
+      up_trailer: "Trailer", up_pro: "View on Proimágenes", up_week: "Week of {d}",
+      up_credit: "Upcoming releases and posters: Proimágenes Colombia.",
       n_films: "{a} features · {b} shorts", n_adm: "Features: {a} · Shorts: {b}",
       n_feat: "{p} of releases · {a} admissions", n_short: "{p} of releases · {a} admissions",
       n_median: "Average: {a}", n_none: "No feature films in the selection",
@@ -197,6 +209,7 @@
     hiddenAdm: new Set(["Cortometraje"]),
   };
   let MARKET = null;
+  let UPCOMING = null;
   let REGIONS = null, DEP_NAMES = {};  // DANE code -> display name (from the map file)
   const ORIGINS = ["CO", "US", "OT"];
   let FILMS = [], META = {}, TOPICS = [], HAS_TOPICS = false, MIN_DATE, MAX_DATE, MIN_YEAR, MAX_YEAR;
@@ -273,6 +286,7 @@
     renderMarket();
     renderShare();
     renderRegions();
+    renderUpcoming();
     renderTable(rows);
   }
 
@@ -876,6 +890,74 @@
     el.setAttribute("aria-label", t("scr_title_s"));
   }
 
+  // ---------- upcoming releases (Proimágenes; ignores the filters) ----------
+  const upcomingFilms = () => {
+    const today = iso(new Date());
+    return (UPCOMING?.upcoming || []).filter((f) => f.d >= today);  // the data can be a few days old
+  };
+  // Proimágenes titles are in capitals: title-case them, keeping Spanish connecting words lowercase.
+  const filmTitle = (s) => titleCase(s).replace(/ (De|Del|La|Las|Los|El|Y|E|O|Por|Para|En|Con|Sin|Al|A|Un|Una)(?= )/g, (m) => m.toLowerCase());
+  const genreLabel = (g) => (g || "").split(",")[0].replace(/\s*\/\s*Todas?$/i, "").trim();
+
+  function renderUpcoming() {
+    const films = upcomingFilms();
+    $("#upHead").hidden = $("#upGrid").hidden = !films.length;
+    if (!films.length) return;
+    $("#upHint").textContent = t("up_hint", { n: films.length, d: dateFmt(UPCOMING.meta.fetched.slice(0, 10)) });
+
+    const list = $("#upList");
+    list.replaceChildren(...films.map((f) => {
+      const li = document.createElement("li");
+      const link = (cls, child) => {
+        const a = document.createElement("a");
+        a.href = f.url; a.target = "_blank"; a.rel = "noopener"; a.className = cls; a.append(child); return a;
+      };
+      if (f.poster) {
+        const img = document.createElement("img");
+        img.src = f.poster; img.alt = filmTitle(f.t); img.loading = "lazy"; img.width = 40; img.height = 56;
+        img.referrerPolicy = "no-referrer";
+        li.append(link("up-poster", img));
+      }
+      const body = document.createElement("div"); body.className = "up-body";
+      const title = document.createElement("strong"); title.textContent = filmTitle(f.t);
+      const meta = document.createElement("p"); meta.className = "up-meta";
+      meta.textContent = [f.dir, genreLabel(f.g), f.m ? t("minutes", { n: f.m }) : "", f.dist].filter(Boolean).join(" · ");
+      const links = document.createElement("p"); links.className = "up-links";
+      links.append(link("", document.createTextNode(t("up_pro"))));
+      if (f.trailer) {
+        const tr = document.createElement("a");
+        tr.href = f.trailer; tr.target = "_blank"; tr.rel = "noopener"; tr.textContent = t("up_trailer");
+        links.append(document.createTextNode(" · "), tr);
+      }
+      body.append(link("up-title", title), meta, links);
+      const date = document.createElement("time"); date.className = "up-date"; date.dateTime = f.d;
+      date.textContent = dateFmt(f.d, { day: "numeric", month: "short" });
+      li.append(body, date);
+      return li;
+    }));
+
+    // Premieres per week for the next 10 weeks.
+    const start = bucketKey(iso(new Date()), "week");
+    const weeks = [...Array(10)].map((_, i) => { const d = new Date(start + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 7 * i); return iso(d); });
+    const counts = Object.fromEntries(weeks.map((w) => [w, 0]));
+    for (const f of films) { const w = bucketKey(f.d, "week"); if (w in counts) counts[w] += 1; }
+    const c = chart("chUp");
+    c.setOption({
+      ...base(),
+      tooltip: { ...base().tooltip, trigger: "axis", axisPointer: { type: "shadow", shadowStyle: { color: css("--wash") } },
+        formatter: (p) => {
+          const w = weeks[p[0].dataIndex];
+          const names = films.filter((f) => bucketKey(f.d, "week") === w).map((f) => esc(filmTitle(f.t)));
+          return `<div style="margin-bottom:4px;color:${css("--ink-2")}">${esc(t("up_week", { d: dateFmt(w) }))}</div>`
+            + `<div><b>${p[0].value}</b> ${t("films_word")}</div>` + (names.length ? `<div style="color:${css("--ink-2")}">${names.join("<br>")}</div>` : "");
+        } },
+      xAxis: catAxis(weeks.map((w) => dateFmt(w, { day: "numeric", month: "short" })), { axisLabel: { color: css("--muted"), fontSize: 11, hideOverlap: true } }),
+      yAxis: valueAxis({ minInterval: 1 }),
+      series: [{ type: "bar", barMaxWidth: 24, data: weeks.map((w) => counts[w]), itemStyle: { color: css("--s1"), borderRadius: [4, 4, 0, 0] } }],
+    }, true);
+    $("#chUp").setAttribute("aria-label", t("c_up_time"));
+  }
+
   function sortRows(rows) {
     const { key: k, dir } = S.sort;
     const val = (f) => (k === "c" ? f.c.join(",") : k === "tp" ? (f.tp.length ? topicLabel(f.tp[0]) : null)
@@ -940,7 +1022,15 @@
           `${t("th_country")}: ${f.c.map(country).join(", ")}`,
           f.p ? `${t("d_applicant")}: ${f.p}` : "",
         ].filter(Boolean).join(" · ");
-        td.append(h, syn, meta); dr.append(td);
+        td.append(h, syn, meta);
+        if (f.pro) {
+          const p = document.createElement("p"); p.className = "meta";
+          const a = document.createElement("a");
+          a.href = f.pro; a.target = "_blank"; a.rel = "noopener"; a.textContent = t("up_pro");
+          a.addEventListener("click", (ev) => ev.stopPropagation());  // don't collapse the row
+          p.append(a); td.append(p);
+        }
+        dr.append(td);
         return [tr, dr];
       }));
     }
@@ -1011,14 +1101,16 @@
     const getJson = (url) => fetch(url, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
     try {
       // Topics are optional: the dashboard works without them (e.g. before the first tagging run).
-      const [data, tax, tags, market, regions, geo] = await Promise.all([
+      const [data, tax, tags, market, regions, geo, upcoming] = await Promise.all([
         getJson("data/films.json"),
         getJson("data/taxonomy.json").catch(() => null),
         getJson("data/topics.json").catch(() => null),
         getJson("data/market.json").catch(() => null),
         getJson("data/regions.json").catch(() => null),
         getJson("data/colombia-departments.geo.json").catch(() => null),
+        getJson("data/upcoming.json").catch(() => null),
       ]);
+      UPCOMING = upcoming?.meta ? upcoming : null;
       META = data.meta || {};
       MARKET = market?.daily?.length ? market : null;
       // The regions section needs both its data and the map outlines.
@@ -1035,6 +1127,14 @@
         _s: norm(`${f.t} ${f.o} ${f.dir || ""}`),
       }));
       HAS_TOPICS = FILMS.some((f) => f.tp.length);
+      // Link recent releases to their Proimágenes page: same title (ignoring accents and punctuation), dates ≤ 21 days apart.
+      const key = (s) => norm(s).replace(/[^a-z0-9]+/g, "");
+      const recent = new Map();
+      for (const r of [...(UPCOMING?.recent || []), ...(UPCOMING?.upcoming || [])]) recent.set(key(r.t), r);
+      for (const f of FILMS) {
+        const r = recent.get(key(f.t));
+        if (r && Math.abs(Date.parse(r.d) - Date.parse(f.d)) <= 21 * 864e5) f.pro = r.url;
+      }
     } catch (e) {
       const l = $("#loading"); l.textContent = t("load_error"); l.classList.add("error");
       return;
